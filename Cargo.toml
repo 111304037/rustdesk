@@ -34,6 +34,9 @@ mediacodec = ["scrap/mediacodec"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+#vpx-sys=0.1.1
+#libvpx = { git = "https://github.com/rust-av/vpx-rs" }
+#vpx = { version = "1.8.1", features = ["use-vcpkg"] }
 whoami = "1.2"
 scrap = { path = "libs/scrap", features = ["wayland"] }
 hbb_common = { path = "libs/hbb_common" }
@@ -147,6 +150,9 @@ cc = "1.0"
 hbb_common = { path = "libs/hbb_common" }
 simple_rc = { path = "libs/simple_rc", optional = true }
 flutter_rust_bridge_codegen = "1.61.1"
+
+[package.metadata.vcpkg]
+dependencies = ["libvpx:x64-windows-static"]
 
 [dev-dependencies]
 hound = "3.5"

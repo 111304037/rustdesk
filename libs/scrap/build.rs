@@ -3,10 +3,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+macro_rules! p {
+    ($($tokens: tt)*) => {
+        println!("cargo:warning={}", format!($($tokens)*))
+    }
+}
+
 /// Link vcppkg package.
 fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let mut target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    p!("target_arch:{target_arch}");
     if target_arch == "x86_64" {
         target_arch = "x64".to_owned();
     } else if target_arch == "aarch64" {
@@ -28,7 +35,7 @@ fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
     if target_arch == "x86" {
         target = target.replace("x64", "x86");
     }
-    println!("cargo:info={}", target);
+    p!("cargo:info={}", target);
     path.push("installed");
     path.push(target);
     println!(
@@ -46,7 +53,8 @@ fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
         )
     );
     let include = path.join("include");
-    println!("{}", format!("cargo:include={}", include.to_str().unwrap()));
+    p!("path:{}", path.to_str().unwrap());
+    p!("{}", format!("cargo:include={}", include.to_str().unwrap()));
     include
 }
 
@@ -104,6 +112,7 @@ fn link_homebrew_m1(name: &str) -> PathBuf {
 /// Find package. By default, it will try to find vcpkg first, then homebrew(currently only for Mac M1).
 fn find_package(name: &str) -> Vec<PathBuf> {
     if let Ok(vcpkg_root) = std::env::var("VCPKG_ROOT") {
+        p!("vcpkg_root:{vcpkg_root}");
         vec![link_vcpkg(vcpkg_root.into(), name)]
     } else {
         // Try using homebrew
@@ -136,7 +145,9 @@ fn generate_bindings(
 }
 
 fn gen_vpx() {
+    p!("gen_vpx begin");
     let includes = find_package("libvpx");
+    p!("libvpx include:{}", includes[0].to_str().unwrap());
     let src_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
     let src_dir = Path::new(&src_dir);
     let out_dir = env::var_os("OUT_DIR").unwrap();
@@ -151,9 +162,11 @@ fn gen_vpx() {
     let ffi_rs = out_dir.join("vpx_ffi.rs");
     let exact_file = src_dir.join("generated").join("vpx_ffi.rs");
     generate_bindings(&ffi_header, &includes, &ffi_rs, &exact_file);
+    p!("gen_vpx end");
 }
 
 fn main() {
+    p!("-------------------build scrap begin------------------");
     // note: all link symbol names in x86 (32-bit) are prefixed wth "_".
     // run "rustup show" to show current default toolchain, if it is stable-x86-pc-windows-msvc,
     // please install x64 toolchain by "rustup toolchain install stable-x86_64-pc-windows-msvc",
@@ -184,4 +197,5 @@ fn main() {
         // On UNIX we pray that X11 (with XCB) is available.
         println!("cargo:rustc-cfg=x11");
     }
+    p!("-------------------build scrap end------------------");
 }
