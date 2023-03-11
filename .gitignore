@@ -8,15 +8,6 @@ src/ui/inline.rs
 extractor
 __pycache__
 src/version.rs
-*dmg
-*exe
-*tgz
-cert.pfx
-*.bak
-*png
-*svg
-*jpg
-sciter.dll
 **pdb
 src/bridge_generated.rs
 src/bridge_generated.io.rs
