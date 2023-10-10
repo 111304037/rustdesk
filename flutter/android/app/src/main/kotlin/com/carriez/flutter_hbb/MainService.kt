@@ -71,17 +71,26 @@ class MainService : Service() {
 
     @Keep
     @RequiresApi(Build.VERSION_CODES.N)
-    fun rustMouseInput(mask: Int, x: Int, y: Int) {
+    fun rustPointerInput(kind: String, mask: Int, x: Int, y: Int) {
         // turn on screen with LIFT_DOWN when screen off
-        if (!powerManager.isInteractive && mask == LIFT_DOWN) {
+        if (!powerManager.isInteractive && (kind == "touch" || mask == LIFT_DOWN)) {
             if (wakeLock.isHeld) {
-                Log.d(logTag,"Turn on Screen, WakeLock release")
+                Log.d(logTag, "Turn on Screen, WakeLock release")
                 wakeLock.release()
             }
             Log.d(logTag,"Turn on Screen")
             wakeLock.acquire(5000)
         } else {
-            InputService.ctx?.onMouseInput(mask,x,y)
+            when (kind) {
+                "touch" -> {
+                    InputService.ctx?.onTouchInput(mask, x, y)
+                }
+                "mouse" -> {
+                    InputService.ctx?.onMouseInput(mask, x, y)
+                }
+                else -> {
+                }
+            }
         }
     }
 
@@ -384,6 +393,7 @@ class MainService : Service() {
         return true
     }
 
+    @Synchronized
     fun stopCapture() {
         Log.d(logTag, "Stop Capture")
         setFrameRawEnable("video",false)
@@ -623,7 +633,7 @@ class MainService : Service() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentTitle(DEFAULT_NOTIFY_TITLE)
-            .setContentText(translate(DEFAULT_NOTIFY_TEXT) + '!')
+            .setContentText(translate(DEFAULT_NOTIFY_TEXT))
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setColor(ContextCompat.getColor(this, R.color.primary))
@@ -689,7 +699,7 @@ class MainService : Service() {
 
     private fun setTextNotification(_title: String?, _text: String?) {
         val title = _title ?: DEFAULT_NOTIFY_TITLE
-        val text = _text ?: translate(DEFAULT_NOTIFY_TEXT) + '!'
+        val text = _text ?: translate(DEFAULT_NOTIFY_TEXT)
         val notification = notificationBuilder
             .clearActions()
             .setStyle(null)

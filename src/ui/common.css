@@ -142,6 +142,10 @@ div.password input {
     font-size: 1.2em;
 }
 
+div.username input {
+  font-size: 1.2em;
+}
+
 svg {
     background: none;
 }
@@ -367,7 +371,6 @@ menu li.line-through, menu li.line-through :hover {
 }
 
 #tags {
-    border: color(border) 1px solid;
     size: *;
     padding: 0.5em;
     overflow-y: scroll-indicator;
@@ -376,8 +379,8 @@ menu li.line-through, menu li.line-through :hover {
 }
 
 #tags span {
+    background: color(gray-bg);
     display: inline-block;
-    border: color(border) 1px solid;
     border-radius: 6px;
     padding: 3px 0.5em;
     word-wrap: normal;

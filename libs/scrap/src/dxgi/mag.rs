@@ -127,18 +127,9 @@ impl MagInterface {
         };
         s.init_succeeded = false;
         unsafe {
-            if GetSystemMetrics(SM_CMONITORS) != 1 {
-                // Do not try to use the magnifier in multi-screen setup (where the API
-                // crashes sometimes).
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "Magnifier capturer cannot work on multi-screen system.",
-                ));
-            }
-
             // load lib
             let lib_file_name = "Magnification.dll";
-            let lib_file_name_c = CString::new(lib_file_name).unwrap();
+            let lib_file_name_c = CString::new(lib_file_name)?;
             s.lib_handle = LoadLibraryExA(
                 lib_file_name_c.as_ptr() as _,
                 NULL,
@@ -198,7 +189,7 @@ impl MagInterface {
     }
 
     unsafe fn load_func(lib_module: HMODULE, func_name: &str) -> Result<FARPROC> {
-        let func_name_c = CString::new(func_name).unwrap();
+        let func_name_c = CString::new(func_name)?;
         let func = GetProcAddress(lib_module, func_name_c.as_ptr() as _);
         if func.is_null() {
             return Err(Error::new(
@@ -451,7 +442,7 @@ impl CapturerMag {
     }
 
     pub(crate) fn exclude(&mut self, cls: &str, name: &str) -> Result<bool> {
-        let name_c = CString::new(name).unwrap();
+        let name_c = CString::new(name)?;
         unsafe {
             let mut hwnd = if cls.len() == 0 {
                 FindWindowExA(NULL as _, NULL as _, NULL as _, name_c.as_ptr())

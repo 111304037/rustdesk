@@ -1,18 +1,11 @@
 use docopt::Docopt;
 use hbb_common::env_logger::{init_from_env, Env, DEFAULT_FILTER_ENV};
-#[cfg(feature = "hwcodec")]
-use hwcodec::{
-    decode::{DecodeContext, Decoder},
-    encode::{EncodeContext, Encoder},
-    ffmpeg::{CodecInfo, CodecInfos},
-    AVPixelFormat,
-    Quality::*,
-    RateControl::*,
-};
 use scrap::{
-    codec::{EncoderApi, EncoderCfg},
+    aom::{AomDecoder, AomEncoder, AomEncoderConfig},
+    codec::{EncoderApi, EncoderCfg, Quality as Q},
     Capturer, Display, TraitCapturer, VpxDecoder, VpxDecoderConfig, VpxEncoder, VpxEncoderConfig,
-    VpxVideoCodecId, STRIDE_ALIGN,
+    VpxVideoCodecId::{self, *},
+    STRIDE_ALIGN,
 };
 use std::{io::Write, time::Instant};
 
@@ -22,21 +15,22 @@ const USAGE: &'static str = "
 Codec benchmark.
 
 Usage:
-  benchmark [--count=COUNT] [--bitrate=KBS] [--hw-pixfmt=PIXFMT]
+  benchmark [--count=COUNT] [--quality=QUALITY] [--hw-pixfmt=PIXFMT]
   benchmark (-h | --help)
 
 Options:
-  -h --help     Show this screen.
+  -h --help             Show this screen.
   --count=COUNT         Capture frame count [default: 100].
-  --bitrate=KBS         Video bitrate in kilobits per second [default: 5000].
-  --hw-pixfmt=PIXFMT    Hareware codec pixfmt. [default: i420]
+  --quality=QUALITY     Video quality [default: Balanced].
+                        Valid values: Best, Balanced, Low.
+  --hw-pixfmt=PIXFMT    Hardware codec pixfmt. [default: i420]
                         Valid values: i420, nv12.
 ";
 
 #[derive(Debug, serde::Deserialize)]
 struct Args {
-    flag_count: u32,
-    flag_bitrate: u32,
+    flag_count: usize,
+    flag_quality: Quality,
     flag_hw_pixfmt: Pixfmt,
 }
 
@@ -46,27 +40,41 @@ enum Pixfmt {
     NV12,
 }
 
+#[derive(Debug, serde::Deserialize)]
+enum Quality {
+    Best,
+    Balanced,
+    Low,
+}
+
 fn main() {
     init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
-    let bitrate_k = args.flag_bitrate as usize;
-    let yuv_count = args.flag_count as usize;
+    let quality = args.flag_quality;
+    let yuv_count = args.flag_count;
     let (yuvs, width, height) = capture_yuv(yuv_count);
     println!(
-        "benchmark {}x{} bitrate:{}k hw_pixfmt:{:?} count:{:?}",
-        width, height, bitrate_k, args.flag_hw_pixfmt, yuv_count
+        "benchmark {}x{} quality:{:?}k hw_pixfmt:{:?}",
+        width, height, quality, args.flag_hw_pixfmt
     );
-    test_vp9(&yuvs, width, height, bitrate_k, yuv_count);
+    let quality = match quality {
+        Quality::Best => Q::Best,
+        Quality::Balanced => Q::Balanced,
+        Quality::Low => Q::Low,
+    };
+    [VP8, VP9].map(|c| test_vpx(c, &yuvs, width, height, quality, yuv_count));
+    test_av1(&yuvs, width, height, quality, yuv_count);
     #[cfg(feature = "hwcodec")]
     {
+        use hwcodec::AVPixelFormat;
         let hw_pixfmt = match args.flag_hw_pixfmt {
             Pixfmt::I420 => AVPixelFormat::AV_PIX_FMT_YUV420P,
             Pixfmt::NV12 => AVPixelFormat::AV_PIX_FMT_NV12,
         };
-        let yuvs = hw::vp9_yuv_to_hw_yuv(yuvs, width, height, hw_pixfmt);
-        hw::test(&yuvs, width, height, bitrate_k, yuv_count, hw_pixfmt);
+        let yuvs = hw::vpx_yuv_to_hw_yuv(yuvs, width, height, hw_pixfmt);
+        hw::test(&yuvs, width, height, quality, yuv_count, hw_pixfmt);
     }
 }
 
@@ -82,76 +90,120 @@ fn capture_yuv(yuv_count: usize) -> (Vec<Vec<u8>>, usize, usize) {
     let d = displays.remove(index);
     let mut c = Capturer::new(d, true).unwrap();
     let mut v = vec![];
-    let start = Instant::now();
     loop {
         if let Ok(frame) = c.frame(std::time::Duration::from_millis(30)) {
             v.push(frame.0.to_vec());
-            print!(
-                "\rcapture {}/{}...{}s",
-                v.len(),
-                yuv_count,
-                start.elapsed().as_secs()
-            );
+            print!("\rcapture {}/{}", v.len(), yuv_count);
             std::io::stdout().flush().ok();
             if v.len() == yuv_count {
-                println!("\rcapture {}/{} finish", yuv_count, yuv_count);
+                println!();
                 return (v, c.width(), c.height());
             }
         }
     }
 }
 
-fn test_vp9(yuvs: &Vec<Vec<u8>>, width: usize, height: usize, bitrate_k: usize, yuv_count: usize) {
+fn test_vpx(
+    codec_id: VpxVideoCodecId,
+    yuvs: &Vec<Vec<u8>>,
+    width: usize,
+    height: usize,
+    quality: Q,
+    yuv_count: usize,
+) {
     let config = EncoderCfg::VPX(VpxEncoderConfig {
         width: width as _,
         height: height as _,
-        timebase: [1, 1000],
-        bitrate: bitrate_k as _,
-        codec: VpxVideoCodecId::VP9,
-        num_threads: (num_cpus::get() / 2) as _,
+        quality,
+        codec: codec_id,
+        keyframe_interval: None,
     });
     let mut encoder = VpxEncoder::new(config).unwrap();
+    let mut vpxs = vec![];
     let start = Instant::now();
-    for yuv in yuvs {
-        let _ = encoder
-            .encode(start.elapsed().as_millis() as _, yuv, STRIDE_ALIGN)
-            .unwrap();
-        let _ = encoder.flush().unwrap();
-    }
-    println!("vp9 encode: {:?}", start.elapsed() / yuv_count as _);
-
-    // prepare data separately
-    let mut vp9s = vec![];
-    let start = Instant::now();
+    let mut size = 0;
     for yuv in yuvs {
         for ref frame in encoder
             .encode(start.elapsed().as_millis() as _, yuv, STRIDE_ALIGN)
             .unwrap()
         {
-            vp9s.push(frame.data.to_vec());
+            size += frame.data.len();
+            vpxs.push(frame.data.to_vec());
         }
         for ref frame in encoder.flush().unwrap() {
-            vp9s.push(frame.data.to_vec());
+            size += frame.data.len();
+            vpxs.push(frame.data.to_vec());
         }
     }
+    assert_eq!(vpxs.len(), yuv_count);
+    println!(
+        "{:?} encode: {:?}, {} byte",
+        codec_id,
+        start.elapsed() / yuv_count as _,
+        size / yuv_count
+    );
 
-    let mut decoder = VpxDecoder::new(VpxDecoderConfig {
-        codec: VpxVideoCodecId::VP9,
-        num_threads: (num_cpus::get() / 2) as _,
-    })
-    .unwrap();
+    let mut decoder = VpxDecoder::new(VpxDecoderConfig { codec: codec_id }).unwrap();
     let start = Instant::now();
-    for vp9 in vp9s {
-        let _ = decoder.decode(&vp9);
+    for vpx in vpxs {
+        let _ = decoder.decode(&vpx);
         let _ = decoder.flush();
     }
-    println!("vp9 decode: {:?}", start.elapsed() / yuv_count as _);
+    println!(
+        "{:?} decode: {:?}",
+        codec_id,
+        start.elapsed() / yuv_count as _
+    );
+}
+
+fn test_av1(yuvs: &Vec<Vec<u8>>, width: usize, height: usize, quality: Q, yuv_count: usize) {
+    let config = EncoderCfg::AOM(AomEncoderConfig {
+        width: width as _,
+        height: height as _,
+        quality,
+        keyframe_interval: None,
+    });
+    let mut encoder = AomEncoder::new(config).unwrap();
+    let start = Instant::now();
+    let mut size = 0;
+    let mut av1s = vec![];
+    for yuv in yuvs {
+        for ref frame in encoder
+            .encode(start.elapsed().as_millis() as _, yuv, STRIDE_ALIGN)
+            .unwrap()
+        {
+            size += frame.data.len();
+            av1s.push(frame.data.to_vec());
+        }
+    }
+    assert_eq!(av1s.len(), yuv_count);
+    println!(
+        "AV1 encode: {:?}, {} byte",
+        start.elapsed() / yuv_count as _,
+        size / yuv_count
+    );
+    let mut decoder = AomDecoder::new().unwrap();
+    let start = Instant::now();
+    for av1 in av1s {
+        let _ = decoder.decode(&av1);
+        let _ = decoder.flush();
+    }
+    println!("AV1 decode: {:?}", start.elapsed() / yuv_count as _);
 }
 
 #[cfg(feature = "hwcodec")]
 mod hw {
-    use hwcodec::ffmpeg::ffmpeg_linesize_offset_length;
+    use super::*;
+    use hwcodec::{
+        decode::{DecodeContext, Decoder},
+        encode::{EncodeContext, Encoder},
+        ffmpeg::{ffmpeg_linesize_offset_length, CodecInfo, CodecInfos},
+        AVPixelFormat,
+        Quality::*,
+        RateControl::*,
+    };
     use scrap::{
+        codec::codec_thread_num,
         convert::{
             hw::{hw_bgra_to_i420, hw_bgra_to_nv12},
             i420_to_bgra,
@@ -159,39 +211,41 @@ mod hw {
         HW_STRIDE_ALIGN,
     };
 
-    use super::*;
     pub fn test(
         yuvs: &Vec<Vec<u8>>,
         width: usize,
         height: usize,
-        bitrate_k: usize,
-        _yuv_count: usize,
+        quality: Q,
+        yuv_count: usize,
         pixfmt: AVPixelFormat,
     ) {
+        let bitrate = scrap::hwcodec::HwEncoder::convert_quality(quality);
         let ctx = EncodeContext {
             name: String::from(""),
             width: width as _,
             height: height as _,
             pixfmt,
             align: 0,
-            bitrate: (bitrate_k * 1000) as _,
+            bitrate: bitrate as i32 * 1000,
             timebase: [1, 30],
             gop: 60,
             quality: Quality_Default,
             rc: RC_DEFAULT,
+            thread_count: codec_thread_num() as _,
         };
 
-        println!("hw encoders:");
         let encoders = Encoder::available_encoders(ctx.clone());
+        println!("hw encoders: {}", encoders.len());
         let best = CodecInfo::score(encoders.clone());
         for info in encoders {
             test_encoder(info.clone(), ctx.clone(), yuvs, is_best(&best, &info));
         }
 
         let (h264s, h265s) = prepare_h26x(best, ctx.clone(), yuvs);
-
-        println!("hw decoders:");
+        assert!(h264s.is_empty() || h264s.len() == yuv_count);
+        assert!(h265s.is_empty() || h265s.len() == yuv_count);
         let decoders = Decoder::available_decoders();
+        println!("hw decoders: {}", decoders.len());
         let best = CodecInfo::score(decoders.clone());
         for info in decoders {
             let h26xs = if info.name.contains("h264") {
@@ -199,7 +253,7 @@ mod hw {
             } else {
                 &h265s
             };
-            if h264s.len() == yuvs.len() {
+            if h26xs.len() == yuvs.len() {
                 test_decoder(info.clone(), h26xs, is_best(&best, &info));
             }
         }
@@ -210,14 +264,19 @@ mod hw {
         ctx.name = info.name;
         let mut encoder = Encoder::new(ctx.clone()).unwrap();
         let start = Instant::now();
+        let mut size = 0;
         for yuv in yuvs {
-            let _ = encoder.encode(yuv).unwrap();
+            let frames = encoder.encode(yuv).unwrap();
+            for frame in frames {
+                size += frame.data.len();
+            }
         }
         println!(
-            "{}{}: {:?}",
+            "{}{}: {:?}, {} byte",
             if best { "*" } else { "" },
             ctx.name,
-            start.elapsed() / yuvs.len() as _
+            start.elapsed() / yuvs.len() as _,
+            size / yuvs.len(),
         );
     }
 
@@ -225,6 +284,7 @@ mod hw {
         let ctx = DecodeContext {
             name: info.name,
             device_type: info.hwdevice,
+            thread_count: codec_thread_num() as _,
         };
 
         let mut decoder = Decoder::new(ctx.clone()).unwrap();
@@ -234,11 +294,13 @@ mod hw {
             let _ = decoder.decode(h26x).unwrap();
             cnt += 1;
         }
+        let device = format!("{:?}", ctx.device_type).to_lowercase();
+        let device = device.split("_").last().unwrap();
         println!(
-            "{}{} {:?}: {:?}",
+            "{}{} {}: {:?}",
             if best { "*" } else { "" },
             ctx.name,
-            ctx.device_type,
+            device,
             start.elapsed() / cnt
         );
     }
@@ -270,7 +332,7 @@ mod hw {
         Some(info.clone()) == best.h264 || Some(info.clone()) == best.h265
     }
 
-    pub fn vp9_yuv_to_hw_yuv(
+    pub fn vpx_yuv_to_hw_yuv(
         yuvs: Vec<Vec<u8>>,
         width: usize,
         height: usize,

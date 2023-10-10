@@ -20,7 +20,6 @@ use hbb_common::{
 
 use crate::{
     client::*,
-    ui_interface::has_hwcodec,
     ui_session_interface::{InvokeUiSession, Session},
 };
 
@@ -145,6 +144,8 @@ impl InvokeUiSession for SciterHandler {
         self.call("setConnectionType", &make_args!(is_secured, direct));
     }
 
+    fn set_fingerprint(&self, _fingerprint: String) {}
+
     fn job_error(&self, id: i32, err: String, file_num: i32) {
         self.call("jobError", &make_args!(id, err, file_num));
     }
@@ -197,10 +198,17 @@ impl InvokeUiSession for SciterHandler {
         self.call("confirmDeleteFiles", &make_args!(id, i, name));
     }
 
-    fn override_file_confirm(&self, id: i32, file_num: i32, to: String, is_upload: bool) {
+    fn override_file_confirm(
+        &self,
+        id: i32,
+        file_num: i32,
+        to: String,
+        is_upload: bool,
+        is_identical: bool,
+    ) {
         self.call(
             "overrideFileConfirm",
-            &make_args!(id, file_num, to, is_upload),
+            &make_args!(id, file_num, to, is_upload, is_identical),
         );
     }
 
@@ -215,12 +223,12 @@ impl InvokeUiSession for SciterHandler {
         self.call("adaptSize", &make_args!());
     }
 
-    fn on_rgba(&self, data: &mut Vec<u8>) {
+    fn on_rgba(&self, rgba: &mut scrap::ImageRgb) {
         VIDEO
             .lock()
             .unwrap()
             .as_mut()
-            .map(|v| v.render_frame(data).ok());
+            .map(|v| v.render_frame(&rgba.raw).ok());
     }
 
     fn set_peer_info(&self, pi: &PeerInfo) {
@@ -369,7 +377,7 @@ impl sciter::EventHandler for SciterSession {
                 let source = Element::from(source);
                 use sciter::dom::ELEMENT_AREAS;
                 let flags = ELEMENT_AREAS::CONTENT_BOX as u32 | ELEMENT_AREAS::SELF_RELATIVE as u32;
-                let rc = source.get_location(flags).unwrap();
+                let rc = source.get_location(flags).unwrap_or_default();
                 log::debug!(
                     "[video] start video thread on <{}> which is about {:?} pixels",
                     source,
@@ -398,11 +406,11 @@ impl sciter::EventHandler for SciterSession {
         fn is_file_transfer();
         fn is_port_forward();
         fn is_rdp();
-        fn login(String, bool);
+        fn login(String, String, String, bool);
         fn new_rdp();
         fn send_mouse(i32, i32, i32, bool, bool, bool, bool);
-        fn enter();
-        fn leave();
+        fn enter(String);
+        fn leave(String);
         fn ctrl_alt_del();
         fn transfer_file();
         fn tunnel();
@@ -443,6 +451,7 @@ impl sciter::EventHandler for SciterSession {
         fn save_custom_image_quality(i32);
         fn refresh_video();
         fn record_screen(bool, i32, i32);
+        fn record_status(bool);
         fn get_toggle_option(String);
         fn is_privacy_mode_supported();
         fn toggle_option(String);
@@ -451,8 +460,7 @@ impl sciter::EventHandler for SciterSession {
         fn set_write_override(i32, i32, bool, bool, bool);
         fn get_keyboard_mode();
         fn save_keyboard_mode(String);
-        fn has_hwcodec();
-        fn supported_hwcodec();
+        fn alternative_codecs();
         fn change_prefer_codec();
         fn restart_remote_device();
         fn request_voice_call();
@@ -504,10 +512,6 @@ impl SciterSession {
         v
     }
 
-    fn has_hwcodec(&self) -> bool {
-        has_hwcodec()
-    }
-
     pub fn t(&self, name: String) -> String {
         crate::client::translate(name)
     }
@@ -516,9 +520,11 @@ impl SciterSession {
         super::get_icon()
     }
 
-    fn supported_hwcodec(&self) -> Value {
-        let (h264, h265) = self.0.supported_hwcodec();
+    fn alternative_codecs(&self) -> Value {
+        let (vp8, av1, h264, h265) = self.0.alternative_codecs();
         let mut v = Value::array(0);
+        v.push(vp8);
+        v.push(av1);
         v.push(h264);
         v.push(h265);
         v

@@ -1,26 +1,34 @@
 use super::{CursorData, ResultType};
 use crate::common::PORTABLE_APPNAME_RUNTIME_ENV_KEY;
-use crate::ipc;
-use crate::license::*;
+use crate::{
+    ipc,
+    license::*,
+    privacy_win_mag::{self, WIN_MAG_INJECTED_PROCESS_EXE},
+};
 use hbb_common::{
-    allow_err, bail,
+    allow_err,
+    anyhow::anyhow,
+    bail,
     config::{self, Config},
     log,
     message_proto::Resolution,
     sleep, timeout, tokio,
 };
-use std::io::prelude::*;
 use std::{
+    collections::HashMap,
     ffi::OsString,
-    fs, io, mem,
+    fs, io,
+    io::prelude::*,
+    mem,
     os::windows::process::CommandExt,
-    path::PathBuf,
-    sync::{Arc, Mutex},
+    path::*,
+    ptr::null_mut,
+    sync::{atomic::Ordering, Arc, Mutex},
     time::{Duration, Instant},
 };
 use winapi::{
     ctypes::c_void,
-    shared::{minwindef::*, ntdef::NULL, windef::*},
+    shared::{minwindef::*, ntdef::NULL, windef::*, winerror::*},
     um::{
         errhandlingapi::GetLastError,
         handleapi::CloseHandle,
@@ -34,8 +42,11 @@ use winapi::{
         winbase::*,
         wingdi::*,
         winnt::{
-            TokenElevation, HANDLE, PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_ELEVATION, TOKEN_QUERY,
+            TokenElevation, ES_AWAYMODE_REQUIRED, ES_CONTINUOUS, ES_DISPLAY_REQUIRED,
+            ES_SYSTEM_REQUIRED, HANDLE, PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_ELEVATION,
+            TOKEN_QUERY,
         },
+        winreg::HKEY_CURRENT_USER,
         winuser::*,
     },
 };
@@ -446,6 +457,7 @@ extern "C" {
     fn win_stop_system_key_propagate(v: BOOL);
     fn is_win_down() -> BOOL;
     fn is_local_system() -> BOOL;
+    fn alloc_console_and_redirect();
 }
 
 extern "system" {
@@ -834,15 +846,13 @@ fn get_default_install_path() -> String {
 }
 
 pub fn check_update_broker_process() -> ResultType<()> {
-    // let (_, path, _, _) = get_install_info();
-    let process_exe = crate::win_privacy::INJECTED_PROCESS_EXE;
-    let origin_process_exe = crate::win_privacy::ORIGIN_PROCESS_EXE;
+    let process_exe = privacy_win_mag::INJECTED_PROCESS_EXE;
+    let origin_process_exe = privacy_win_mag::ORIGIN_PROCESS_EXE;
 
     let exe_file = std::env::current_exe()?;
-    if exe_file.parent().is_none() {
+    let Some(cur_dir) = exe_file.parent() else {
         bail!("Cannot get parent of current exe file");
-    }
-    let cur_dir = exe_file.parent().unwrap();
+    };
     let cur_exe = cur_dir.join(process_exe);
 
     if !std::path::Path::new(&cur_exe).exists() {
@@ -869,12 +879,10 @@ pub fn check_update_broker_process() -> ResultType<()> {
     let cmds = format!(
         "
         chcp 65001
-        taskkill /F /IM {broker_exe}
+        taskkill /F /IM {process_exe}
         copy /Y \"{origin_process_exe}\" \"{cur_exe}\"
     ",
-        broker_exe = process_exe,
-        origin_process_exe = origin_process_exe,
-        cur_exe = cur_exe.to_string_lossy().to_string(),
+        cur_exe = cur_exe.to_string_lossy(),
     );
     run_cmds(cmds, false, "update_broker")?;
 
@@ -895,70 +903,42 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
     (subkey, path, start_menu, exe)
 }
 
-pub fn copy_exe_cmd(src_exe: &str, _exe: &str, path: &str) -> String {
-    #[cfg(feature = "flutter")]
-    let main_exe = format!(
+pub fn copy_raw_cmd(src_raw: &str, _raw: &str, _path: &str) -> ResultType<String> {
+    let main_raw = format!(
         "XCOPY \"{}\" \"{}\" /Y /E /H /C /I /K /R /Z",
-        PathBuf::from(src_exe)
+        PathBuf::from(src_raw)
             .parent()
-            .unwrap()
+            .ok_or(anyhow!("Can't get parent directory of {src_raw}"))?
             .to_string_lossy()
             .to_string(),
-        path
+        _path
     );
-    #[cfg(not(feature = "flutter"))]
-    let main_exe = format!(
-        "copy /Y \"{src_exe}\" \"{exe}\"",
-        src_exe = src_exe,
-        exe = _exe
-    );
+    return Ok(main_raw);
+}
 
-    return format!(
+pub fn copy_exe_cmd(src_exe: &str, exe: &str, path: &str) -> ResultType<String> {
+    let main_exe = copy_raw_cmd(src_exe, exe, path)?;
+    Ok(format!(
         "
         {main_exe}
         copy /Y \"{ORIGIN_PROCESS_EXE}\" \"{path}\\{broker_exe}\"
-        \"{src_exe}\" --extract \"{path}\"
         ",
-        main_exe = main_exe,
-        path = path,
-        ORIGIN_PROCESS_EXE = crate::win_privacy::ORIGIN_PROCESS_EXE,
-        broker_exe = crate::win_privacy::INJECTED_PROCESS_EXE,
-    );
-}
-
-pub fn update_me() -> ResultType<()> {
-    let (_, path, _, exe) = get_install_info();
-    let src_exe = std::env::current_exe()?.to_str().unwrap_or("").to_owned();
-    let cmds = format!(
-        "
-        chcp 65001
-        sc stop {app_name}
-        taskkill /F /IM {broker_exe}
-        taskkill /F /IM {app_name}.exe /FI \"PID ne {cur_pid}\"
-        {copy_exe}
-        sc start {app_name}
-        {lic}
-    ",
-        copy_exe = copy_exe_cmd(&src_exe, &exe, &path),
-        broker_exe = crate::win_privacy::INJECTED_PROCESS_EXE,
-        app_name = crate::get_app_name(),
-        lic = register_licence(),
-        cur_pid = get_current_pid(),
-    );
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    run_cmds(cmds, false, "update")?;
-    std::thread::sleep(std::time::Duration::from_millis(2000));
-    std::process::Command::new(&exe).arg("--tray").spawn().ok();
-    std::process::Command::new(&exe).spawn().ok();
-    std::process::Command::new(&exe)
-        .args(&["--remove", &src_exe])
-        .spawn()?;
-    Ok(())
+        ORIGIN_PROCESS_EXE = privacy_win_mag::ORIGIN_PROCESS_EXE,
+        broker_exe = privacy_win_mag::INJECTED_PROCESS_EXE,
+    ))
 }
 
 fn get_after_install(exe: &str) -> String {
     let app_name = crate::get_app_name();
     let ext = app_name.to_lowercase();
+
+    // reg delete HKEY_CURRENT_USER\Software\Classes for
+    // https://github.com/rustdesk/rustdesk/commit/f4bdfb6936ae4804fc8ab1cf560db192622ad01a
+    // and https://github.com/leanflutter/uni_links_desktop/blob/1b72b0226cec9943ca8a84e244c149773f384e46/lib/src/protocol_registrar_impl_windows.dart#L30
+    let hcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+    hcu.delete_subkey_all(format!("Software\\Classes\\{}", exe))
+        .ok();
+
     format!("
     chcp 65001
     reg add HKEY_CLASSES_ROOT\\.{ext} /f
@@ -968,11 +948,17 @@ fn get_after_install(exe: &str) -> String {
     reg add HKEY_CLASSES_ROOT\\.{ext}\\shell\\open /f
     reg add HKEY_CLASSES_ROOT\\.{ext}\\shell\\open\\command /f
     reg add HKEY_CLASSES_ROOT\\.{ext}\\shell\\open\\command /f /ve /t REG_SZ /d \"\\\"{exe}\\\" --play \\\"%%1\\\"\"
-    sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
+    reg add HKEY_CLASSES_ROOT\\{ext} /f
+    reg add HKEY_CLASSES_ROOT\\{ext} /f /v \"URL Protocol\" /t REG_SZ /d \"\"
+    reg add HKEY_CLASSES_ROOT\\{ext}\\shell /f
+    reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open /f
+    reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open\\command /f
+    reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open\\command /f /ve /t REG_SZ /d \"\\\"{exe}\\\" \\\"%%1\\\"\"
+    netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=out action=allow program=\"{exe}\" enable=yes
     netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=in action=allow program=\"{exe}\" enable=yes
-    sc start {app_name}
+    {create_service}
     reg add HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /f /v SoftwareSASGeneration /t REG_DWORD /d 1
-    ", ext=ext, exe=exe, app_name=app_name)
+    ", create_service=get_create_service(&exe))
 }
 
 pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> ResultType<()> {
@@ -998,6 +984,7 @@ pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> Res
     if versions.len() > 2 {
         version_build = versions[2];
     }
+    let app_name = crate::get_app_name();
 
     let tmp_path = std::env::temp_dir().to_string_lossy().to_string();
     let mk_shortcut = write_cmds(
@@ -1009,10 +996,7 @@ sLinkFile = \"{tmp_path}\\{app_name}.lnk\"
 Set oLink = oWS.CreateShortcut(sLinkFile)
     oLink.TargetPath = \"{exe}\"
 oLink.Save
-        ",
-            tmp_path = tmp_path,
-            app_name = crate::get_app_name(),
-            exe = exe,
+        "
         ),
         "vbs",
         "mk_shortcut",
@@ -1031,10 +1015,7 @@ Set oLink = oWS.CreateShortcut(sLinkFile)
     oLink.Arguments = \"--uninstall\"
     oLink.IconLocation = \"msiexec.exe\"
 oLink.Save
-        ",
-            tmp_path = tmp_path,
-            app_name = crate::get_app_name(),
-            exe = exe,
+        "
         ),
         "vbs",
         "uninstall_shortcut",
@@ -1042,27 +1023,7 @@ oLink.Save
     .to_str()
     .unwrap_or("")
     .to_owned();
-    let tray_shortcut = write_cmds(
-        format!(
-            "
-Set oWS = WScript.CreateObject(\"WScript.Shell\")
-sLinkFile = \"{tmp_path}\\{app_name} Tray.lnk\"
-
-Set oLink = oWS.CreateShortcut(sLinkFile)
-    oLink.TargetPath = \"{exe}\"
-    oLink.Arguments = \"--tray\"
-oLink.Save
-        ",
-            tmp_path = tmp_path,
-            app_name = crate::get_app_name(),
-            exe = exe,
-        ),
-        "vbs",
-        "tray_shortcut",
-    )?
-    .to_str()
-    .unwrap_or("")
-    .to_owned();
+    let tray_shortcut = get_tray_shortcut(&exe, &tmp_path)?;
     let mut shortcuts = Default::default();
     if options.contains("desktopicon") {
         shortcuts = format!(
@@ -1073,15 +1034,11 @@ oLink.Save
     }
     if options.contains("startmenu") {
         shortcuts = format!(
-            "{}
+            "{shortcuts}
 md \"{start_menu}\"
 copy /Y \"{tmp_path}\\{app_name}.lnk\" \"{start_menu}\\\"
 copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{start_menu}\\\"
-     ",
-            shortcuts,
-            start_menu = start_menu,
-            tmp_path = tmp_path,
-            app_name = crate::get_app_name(),
+     "
         );
     }
 
@@ -1099,14 +1056,22 @@ if exist \"{tray_shortcut}\" del /f /q \"{tray_shortcut}\"
 if exist \"{tmp_path}\\{app_name}.lnk\" del /f /q \"{tmp_path}\\{app_name}.lnk\"
 if exist \"{tmp_path}\\Uninstall {app_name}.lnk\" del /f /q \"{tmp_path}\\Uninstall {app_name}.lnk\"
 if exist \"{tmp_path}\\{app_name} Tray.lnk\" del /f /q \"{tmp_path}\\{app_name} Tray.lnk\"
-        ",
-        mk_shortcut = mk_shortcut,
-        uninstall_shortcut = uninstall_shortcut,
-        tray_shortcut = tray_shortcut,
-        tmp_path = tmp_path,
-        app_name = crate::get_app_name(),
+        "
     );
     let src_exe = std::env::current_exe()?.to_str().unwrap_or("").to_string();
+
+    let install_cert = if options.contains("driverCert") {
+        format!("\"{}\" --install-cert \"RustDeskIddDriver.cer\"", src_exe)
+    } else {
+        "".to_owned()
+    };
+
+    // potential bug here: if run_cmd cancelled, but config file is changed.
+    if let Some(lic) = get_license() {
+        Config::set_option("key".into(), lic.key);
+        Config::set_option("custom-rendezvous-server".into(), lic.host);
+        Config::set_option("api-server".into(), lic.api);
+    }
 
     let cmds = format!(
         "
@@ -1119,15 +1084,15 @@ reg add {subkey} /f /v DisplayIcon /t REG_SZ /d \"{exe}\"
 reg add {subkey} /f /v DisplayName /t REG_SZ /d \"{app_name}\"
 reg add {subkey} /f /v DisplayVersion /t REG_SZ /d \"{version}\"
 reg add {subkey} /f /v Version /t REG_SZ /d \"{version}\"
+reg add {subkey} /f /v BuildDate /t REG_SZ /d \"{build_date}\"
 reg add {subkey} /f /v InstallLocation /t REG_SZ /d \"{path}\"
 reg add {subkey} /f /v Publisher /t REG_SZ /d \"{app_name}\"
-reg add {subkey} /f /v VersionMajor /t REG_DWORD /d {major}
-reg add {subkey} /f /v VersionMinor /t REG_DWORD /d {minor}
-reg add {subkey} /f /v VersionBuild /t REG_DWORD /d {build}
+reg add {subkey} /f /v VersionMajor /t REG_DWORD /d {version_major}
+reg add {subkey} /f /v VersionMinor /t REG_DWORD /d {version_minor}
+reg add {subkey} /f /v VersionBuild /t REG_DWORD /d {version_build}
 reg add {subkey} /f /v UninstallString /t REG_SZ /d \"\\\"{exe}\\\" --uninstall\"
 reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
 reg add {subkey} /f /v WindowsInstaller /t REG_DWORD /d 0
-{lic}
 cscript \"{mk_shortcut}\"
 cscript \"{uninstall_shortcut}\"
 cscript \"{tray_shortcut}\"
@@ -1135,30 +1100,13 @@ copy /Y \"{tmp_path}\\{app_name} Tray.lnk\" \"%PROGRAMDATA%\\Microsoft\\Windows\
 {shortcuts}
 copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{path}\\\"
 {dels}
-sc create {app_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{app_name} Service\"
-sc start {app_name}
-sc stop {app_name}
-sc delete {app_name}
+{import_config}
+{install_cert}
 {after_install}
 {sleep}
     ",
-        uninstall_str=uninstall_str,
-        path=path,
-        exe=exe,
-        subkey=subkey,
-        app_name=crate::get_app_name(),
         version=crate::VERSION,
-        major=version_major,
-        minor=version_minor,
-        build=version_build,
-        size=size,
-        mk_shortcut=mk_shortcut,
-        uninstall_shortcut=uninstall_shortcut,
-        tray_shortcut=tray_shortcut,
-        tmp_path=tmp_path,
-        shortcuts=shortcuts,
-        config_path=Config::file().to_str().unwrap_or(""),
-        lic=register_licence(),
+        build_date=crate::BUILD_DATE,
         after_install=get_after_install(&exe),
         sleep=if debug {
             "timeout 300"
@@ -1170,15 +1118,11 @@ sc delete {app_name}
         } else {
             &dels
         },
-        copy_exe = copy_exe_cmd(&src_exe, &exe, &path),
+        copy_exe = copy_exe_cmd(&src_exe, &exe, &path)?,
+        import_config = get_import_config(&exe),
     );
     run_cmds(cmds, debug, "install")?;
-    std::thread::sleep(std::time::Duration::from_millis(2000));
-    if !silent {
-        std::process::Command::new(&exe).spawn()?;
-        std::process::Command::new(&exe).arg("--tray").spawn()?;
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-    }
+    run_after_run_cmds(silent);
     Ok(())
 }
 
@@ -1207,20 +1151,25 @@ fn get_before_uninstall(kill_self: bool) -> String {
     taskkill /F /IM {broker_exe}
     taskkill /F /IM {app_name}.exe{filter}
     reg delete HKEY_CLASSES_ROOT\\.{ext} /f
+    reg delete HKEY_CLASSES_ROOT\\{ext} /f
     netsh advfirewall firewall delete rule name=\"{app_name} Service\"
     ",
-        app_name = app_name,
-        broker_exe = crate::win_privacy::INJECTED_PROCESS_EXE,
-        ext = ext,
-        filter = filter,
+        broker_exe = WIN_MAG_INJECTED_PROCESS_EXE,
     )
 }
 
 fn get_uninstall(kill_self: bool) -> String {
+    let mut uninstall_cert_cmd = "".to_string();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_path) = exe.to_str() {
+            uninstall_cert_cmd = format!("\"{}\" --uninstall-cert", exe_path);
+        }
+    }
     let (subkey, path, start_menu, _) = get_install_info();
     format!(
         "
     {before_uninstall}
+    {uninstall_cert_cmd}
     reg delete {subkey} /f
     if exist \"{path}\" rd /s /q \"{path}\"
     if exist \"{start_menu}\" rd /s /q \"{start_menu}\"
@@ -1228,10 +1177,7 @@ fn get_uninstall(kill_self: bool) -> String {
     if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
     ",
         before_uninstall=get_before_uninstall(kill_self),
-        subkey=subkey,
         app_name = crate::get_app_name(),
-        path = path,
-        start_menu = start_menu,
     )
 }
 
@@ -1240,6 +1186,7 @@ pub fn uninstall_me(kill_self: bool) -> ResultType<()> {
 }
 
 fn write_cmds(cmds: String, ext: &str, tip: &str) -> ResultType<std::path::PathBuf> {
+    let mut cmds = cmds;
     let mut tmp = std::env::temp_dir();
     // When dir contains these characters, the bat file will not execute in elevated mode.
     if vec!["&", "@", "^"]
@@ -1252,9 +1199,20 @@ fn write_cmds(cmds: String, ext: &str, tip: &str) -> ResultType<std::path::PathB
     }
     tmp.push(format!("{}_{}.{}", crate::get_app_name(), tip, ext));
     let mut file = std::fs::File::create(&tmp)?;
+    if ext == "bat" {
+        let tmp2 = get_undone_file(&tmp)?;
+        std::fs::File::create(&tmp2).ok();
+        cmds = format!(
+            "
+{cmds}
+if exist \"{path}\" del /f /q \"{path}\"
+",
+            path = tmp2.to_string_lossy()
+        );
+    }
     // in case cmds mixed with \r\n and \n, make sure all ending with \r\n
     // in some windows, \r\n required for cmd file to run
-    let cmds = cmds.replace("\r\n", "\n").replace("\n", "\r\n");
+    cmds = cmds.replace("\r\n", "\n").replace("\n", "\r\n");
     if ext == "vbs" {
         let mut v: Vec<u16> = cmds.encode_utf16().collect();
         // utf8 -> utf16le which vbs support it only
@@ -1273,8 +1231,20 @@ fn to_le(v: &mut [u16]) -> &[u8] {
     unsafe { v.align_to().1 }
 }
 
+fn get_undone_file(tmp: &PathBuf) -> ResultType<PathBuf> {
+    let mut tmp1 = tmp.clone();
+    tmp1.set_file_name(format!(
+        "{}.undone",
+        tmp.file_name()
+            .ok_or(anyhow!("Failed to get filename of {:?}", tmp))?
+            .to_string_lossy()
+    ));
+    Ok(tmp1)
+}
+
 fn run_cmds(cmds: String, show: bool, tip: &str) -> ResultType<()> {
     let tmp = write_cmds(cmds, "bat", tip)?;
+    let tmp2 = get_undone_file(&tmp)?;
     let tmp_fn = tmp.to_str().unwrap_or("");
     let res = runas::Command::new("cmd")
         .args(&["/C", &tmp_fn])
@@ -1285,6 +1255,10 @@ fn run_cmds(cmds: String, show: bool, tip: &str) -> ResultType<()> {
         allow_err!(std::fs::remove_file(tmp));
     }
     let _ = res?;
+    if tmp2.exists() {
+        allow_err!(std::fs::remove_file(tmp2));
+        bail!("{} failed", tip);
+    }
     Ok(())
 }
 
@@ -1295,9 +1269,15 @@ pub fn toggle_blank_screen(v: bool) {
     }
 }
 
-pub fn block_input(v: bool) -> bool {
+pub fn block_input(v: bool) -> (bool, String) {
     let v = if v { TRUE } else { FALSE };
-    unsafe { BlockInput(v) == TRUE }
+    unsafe {
+        if BlockInput(v) == TRUE {
+            (true, "".to_owned())
+        } else {
+            (false, format!("Error code: {}", GetLastError()))
+        }
+    }
 }
 
 pub fn add_recent_document(path: &str) {
@@ -1316,11 +1296,13 @@ pub fn add_recent_document(path: &str) {
 }
 
 pub fn is_installed() -> bool {
+    let (_, _, _, exe) = get_install_info();
+    std::fs::metadata(exe).is_ok()
+    /*
     use windows_service::{
         service::ServiceAccess,
         service_manager::{ServiceManager, ServiceManagerAccess},
     };
-    let (_, _, _, exe) = get_install_info();
     if !std::fs::metadata(exe).is_ok() {
         return false;
     }
@@ -1333,19 +1315,10 @@ pub fn is_installed() -> bool {
         }
     }
     return false;
+    */
 }
 
-pub fn get_installed_version() -> String {
-    let (_, _, _, exe) = get_install_info();
-    if let Ok(output) = std::process::Command::new(exe).arg("--version").output() {
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            return line.to_owned();
-        }
-    }
-    "".to_owned()
-}
-
-fn get_reg(name: &str) -> String {
+pub fn get_reg(name: &str) -> String {
     let (subkey, _, _, _) = get_install_info();
     get_reg_of(&subkey, name)
 }
@@ -1360,12 +1333,11 @@ fn get_reg_of(subkey: &str, name: &str) -> String {
     "".to_owned()
 }
 
-fn get_license_from_exe_name() -> ResultType<License> {
+pub fn get_license_from_exe_name() -> ResultType<License> {
     let mut exe = std::env::current_exe()?.to_str().unwrap_or("").to_owned();
     // if defined portable appname entry, replace original executable name with it.
     if let Ok(portable_exe) = std::env::var(PORTABLE_APPNAME_RUNTIME_ENV_KEY) {
         exe = portable_exe;
-        log::debug!("update portable executable name to {}", exe);
     }
     get_license_from_string(&exe)
 }
@@ -1375,43 +1347,9 @@ pub fn is_win_server() -> bool {
     unsafe { is_windows_server() > 0 }
 }
 
-pub fn get_license() -> Option<License> {
-    let mut lic: License = Default::default();
-    if let Ok(tmp) = get_license_from_exe_name() {
-        lic = tmp;
-    } else {
-        lic.key = get_reg("Key");
-        lic.host = get_reg("Host");
-        lic.api = get_reg("Api");
-    }
-    if lic.key.is_empty() || lic.host.is_empty() {
-        return None;
-    }
-    Some(lic)
-}
-
 pub fn bootstrap() {
-    if let Some(lic) = get_license() {
-        *config::PROD_RENDEZVOUS_SERVER.write().unwrap() = lic.host.clone();
-    }
-}
-
-fn register_licence() -> String {
-    let (subkey, _, _, _) = get_install_info();
     if let Ok(lic) = get_license_from_exe_name() {
-        format!(
-            "
-        reg add {subkey} /f /v Key /t REG_SZ /d \"{key}\"
-        reg add {subkey} /f /v Host /t REG_SZ /d \"{host}\"
-        reg add {subkey} /f /v Api /t REG_SZ /d \"{api}\"
-    ",
-            subkey = subkey,
-            key = &lic.key,
-            host = &lic.host,
-            api = &lic.api,
-        )
-    } else {
-        "".to_owned()
+        *config::EXE_RENDEZVOUS_SERVER.write().unwrap() = lic.host.clone();
     }
 }
 
@@ -1432,9 +1370,7 @@ Set oLink = oWS.CreateShortcut(sLinkFile)
     oLink.TargetPath = \"{exe}\"
     oLink.Arguments = \"--connect {id}\"
 oLink.Save
-        ",
-            exe = exe,
-            id = id,
+        "
         ),
         "vbs",
         "connect_shortcut",
@@ -1618,18 +1554,8 @@ pub fn elevate_or_run_as_system(is_setup: bool, is_elevate: bool, is_run_as_syst
     }
 }
 
-// https://github.com/mgostIH/process_list/blob/master/src/windows/mod.rs
-#[repr(transparent)]
-pub(self) struct RAIIHandle(pub HANDLE);
-
-impl Drop for RAIIHandle {
-    fn drop(&mut self) {
-        // This never gives problem except when running under a debugger.
-        unsafe { CloseHandle(self.0) };
-    }
-}
-
 pub fn is_elevated(process_id: Option<DWORD>) -> ResultType<bool> {
+    use hbb_common::platform::windows::RAIIHandle;
     unsafe {
         let handle: HANDLE = match process_id {
             Some(process_id) => OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id),
@@ -1661,29 +1587,6 @@ pub fn is_elevated(process_id: Option<DWORD>) -> ResultType<bool> {
     }
 }
 
-#[inline]
-fn filter_foreground_window(process_id: DWORD) -> ResultType<bool> {
-    if let Ok(output) = std::process::Command::new("tasklist")
-        .args(vec![
-            "/SVC",
-            "/NH",
-            "/FI",
-            &format!("PID eq {}", process_id),
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        let s = String::from_utf8_lossy(&output.stdout)
-            .to_string()
-            .to_lowercase();
-        Ok(["Taskmgr", "mmc", "regedit"]
-            .iter()
-            .any(|name| s.contains(&name.to_string().to_lowercase())))
-    } else {
-        bail!("run tasklist failed");
-    }
-}
-
 pub fn is_foreground_window_elevated() -> ResultType<bool> {
     unsafe {
         let mut process_id: DWORD = 0;
@@ -1691,12 +1594,7 @@ pub fn is_foreground_window_elevated() -> ResultType<bool> {
         if process_id == 0 {
             bail!("Failed to get processId, errno {}", GetLastError())
         }
-        let elevated = is_elevated(Some(process_id))?;
-        if elevated {
-            filter_foreground_window(process_id)
-        } else {
-            Ok(false)
-        }
+        is_elevated(Some(process_id))
     }
 }
 
@@ -1753,9 +1651,18 @@ pub fn send_message_to_hnwd(
 }
 
 pub fn create_process_with_logon(user: &str, pwd: &str, exe: &str, arg: &str) -> ResultType<()> {
+    let last_error_table = HashMap::from([
+        (
+            ERROR_LOGON_FAILURE,
+            "The user name or password is incorrect.",
+        ),
+        (ERROR_ACCESS_DENIED, "Access is denied."),
+    ]);
+
     unsafe {
-        let wuser = wide_string(user);
-        let wpc = wide_string("");
+        let user_split = user.split("\\").collect::<Vec<&str>>();
+        let wuser = wide_string(user_split.get(1).unwrap_or(&user));
+        let wpc = wide_string(user_split.get(0).unwrap_or(&""));
         let wpwd = wide_string(pwd);
         let cmd = if arg.is_empty() {
             format!("\"{}\"", exe)
@@ -1785,7 +1692,14 @@ pub fn create_process_with_logon(user: &str, pwd: &str, exe: &str, arg: &str) ->
                 &mut pi as *mut PROCESS_INFORMATION,
             )
         {
-            bail!("CreateProcessWithLogonW failed, errno={}", GetLastError());
+            let last_error = GetLastError();
+            bail!(
+                "CreateProcessWithLogonW failed : \"{}\", errno={}",
+                last_error_table
+                    .get(&last_error)
+                    .unwrap_or(&"Unknown error"),
+                last_error
+            );
         }
     }
     return Ok(());
@@ -1795,27 +1709,31 @@ pub fn set_path_permission(dir: &PathBuf, permission: &str) -> ResultType<()> {
     std::process::Command::new("icacls")
         .arg(dir.as_os_str())
         .arg("/grant")
-        .arg(format!("Everyone:(OI)(CI){}", permission))
+        .arg(format!("*S-1-1-0:(OI)(CI){}", permission))
         .arg("/T")
         .spawn()?;
     Ok(())
 }
 
+#[inline]
+fn str_to_device_name(name: &str) -> [u16; 32] {
+    let mut device_name: Vec<u16> = wide_string(name);
+    if device_name.len() < 32 {
+        device_name.resize(32, 0);
+    }
+    let mut result = [0; 32];
+    result.copy_from_slice(&device_name[..32]);
+    result
+}
+
 pub fn resolutions(name: &str) -> Vec<Resolution> {
     unsafe {
         let mut dm: DEVMODEW = std::mem::zeroed();
-        let wname = wide_string(name);
-        let len = if wname.len() <= dm.dmDeviceName.len() {
-            wname.len()
-        } else {
-            dm.dmDeviceName.len()
-        };
-        std::ptr::copy_nonoverlapping(wname.as_ptr(), dm.dmDeviceName.as_mut_ptr(), len);
-        dm.dmSize = std::mem::size_of::<DEVMODEW>() as _;
         let mut v = vec![];
         let mut num = 0;
+        let device_name = str_to_device_name(name);
         loop {
-            if EnumDisplaySettingsW(NULL as _, num, &mut dm) == 0 {
+            if EnumDisplaySettingsW(device_name.as_ptr(), num, &mut dm) == 0 {
                 break;
             }
             let r = Resolution {
@@ -1833,11 +1751,11 @@ pub fn resolutions(name: &str) -> Vec<Resolution> {
 }
 
 pub fn current_resolution(name: &str) -> ResultType<Resolution> {
+    let device_name = str_to_device_name(name);
     unsafe {
         let mut dm: DEVMODEW = std::mem::zeroed();
         dm.dmSize = std::mem::size_of::<DEVMODEW>() as _;
-        let wname = wide_string(name);
-        if EnumDisplaySettingsW(wname.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) == 0 {
+        if EnumDisplaySettingsW(device_name.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) == 0 {
             bail!(
                 "failed to get currrent resolution, errno={}",
                 GetLastError()
@@ -1852,25 +1770,20 @@ pub fn current_resolution(name: &str) -> ResultType<Resolution> {
     }
 }
 
-pub fn change_resolution(name: &str, width: usize, height: usize) -> ResultType<()> {
+pub(super) fn change_resolution_directly(
+    name: &str,
+    width: usize,
+    height: usize,
+) -> ResultType<()> {
+    let device_name = str_to_device_name(name);
     unsafe {
         let mut dm: DEVMODEW = std::mem::zeroed();
-        if FALSE == EnumDisplaySettingsW(NULL as _, ENUM_CURRENT_SETTINGS, &mut dm) {
-            bail!("EnumDisplaySettingsW failed, errno={}", GetLastError());
-        }
-        let wname = wide_string(name);
-        let len = if wname.len() <= dm.dmDeviceName.len() {
-            wname.len()
-        } else {
-            dm.dmDeviceName.len()
-        };
-        std::ptr::copy_nonoverlapping(wname.as_ptr(), dm.dmDeviceName.as_mut_ptr(), len);
         dm.dmSize = std::mem::size_of::<DEVMODEW>() as _;
         dm.dmPelsWidth = width as _;
         dm.dmPelsHeight = height as _;
         dm.dmFields = DM_PELSHEIGHT | DM_PELSWIDTH;
         let res = ChangeDisplaySettingsExW(
-            wname.as_ptr(),
+            device_name.as_ptr(),
             &mut dm,
             NULL as _,
             CDS_UPDATEREGISTRY | CDS_GLOBAL | CDS_RESET,
@@ -1901,4 +1814,524 @@ pub fn user_accessible_folder() -> ResultType<PathBuf> {
         bail!("no vaild user accessible folder");
     }
     Ok(dir)
+}
+
+#[inline]
+pub fn install_cert(cert_file: &str) -> ResultType<()> {
+    let exe_file = std::env::current_exe()?;
+    if let Some(cur_dir) = exe_file.parent() {
+        allow_err!(cert::install_cert(cur_dir.join(cert_file)));
+    } else {
+        bail!(
+            "Invalid exe parent for {}",
+            exe_file.to_string_lossy().as_ref()
+        );
+    }
+    Ok(())
+}
+
+#[inline]
+pub fn uninstall_cert() -> ResultType<()> {
+    cert::uninstall_cert()
+}
+
+mod cert {
+    use hbb_common::{allow_err, bail, log, ResultType};
+    use std::{path::Path, str::from_utf8};
+    use winapi::{
+        shared::{
+            minwindef::{BYTE, DWORD, FALSE, TRUE},
+            ntdef::NULL,
+        },
+        um::{
+            errhandlingapi::GetLastError,
+            wincrypt::{
+                CertAddEncodedCertificateToStore, CertCloseStore, CertDeleteCertificateFromStore,
+                CertEnumCertificatesInStore, CertNameToStrA, CertOpenSystemStoreW,
+                CryptHashCertificate, ALG_ID, CALG_SHA1, CERT_ID_SHA1_HASH,
+                CERT_STORE_ADD_REPLACE_EXISTING, CERT_X500_NAME_STR, PCCERT_CONTEXT,
+                X509_ASN_ENCODING,
+            },
+            winreg::HKEY_LOCAL_MACHINE,
+        },
+    };
+    use winreg::{
+        enums::{KEY_WRITE, REG_BINARY},
+        RegKey,
+    };
+
+    const ROOT_CERT_STORE_PATH: &str =
+        "SOFTWARE\\Microsoft\\SystemCertificates\\ROOT\\Certificates\\";
+    const THUMBPRINT_ALG: ALG_ID = CALG_SHA1;
+    const THUMBPRINT_LEN: DWORD = 20;
+
+    const CERT_ISSUER_1: &str = "CN=\"WDKTestCert admin,133225435702113567\"\0";
+
+    #[inline]
+    unsafe fn compute_thumbprint(pb_encoded: *const BYTE, cb_encoded: DWORD) -> (Vec<u8>, String) {
+        let mut size = THUMBPRINT_LEN;
+        let mut thumbprint = [0u8; THUMBPRINT_LEN as usize];
+        if CryptHashCertificate(
+            0,
+            THUMBPRINT_ALG,
+            0,
+            pb_encoded,
+            cb_encoded,
+            thumbprint.as_mut_ptr(),
+            &mut size,
+        ) == TRUE
+        {
+            (
+                thumbprint.to_vec(),
+                hex::encode(thumbprint).to_ascii_uppercase(),
+            )
+        } else {
+            (thumbprint.to_vec(), "".to_owned())
+        }
+    }
+
+    #[inline]
+    unsafe fn open_reg_cert_store() -> ResultType<RegKey> {
+        let hklm = winreg::RegKey::predef(HKEY_LOCAL_MACHINE);
+        Ok(hklm.open_subkey_with_flags(ROOT_CERT_STORE_PATH, KEY_WRITE)?)
+    }
+
+    // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpef/6a9e35fa-2ac7-4c10-81e1-eabe8d2472f1
+    fn create_cert_blob(thumbprint: Vec<u8>, encoded: Vec<u8>) -> Vec<u8> {
+        let mut blob = Vec::new();
+
+        let mut property_id = (CERT_ID_SHA1_HASH as u32).to_le_bytes().to_vec();
+        let mut pro_reserved = [0x01, 0x00, 0x00, 0x00].to_vec();
+        let mut pro_length = (THUMBPRINT_LEN as u32).to_le_bytes().to_vec();
+        let mut pro_val = thumbprint;
+        blob.append(&mut property_id);
+        blob.append(&mut pro_reserved);
+        blob.append(&mut pro_length);
+        blob.append(&mut pro_val);
+
+        let mut blob_reserved = [0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00].to_vec();
+        let mut blob_length = (encoded.len() as u32).to_le_bytes().to_vec();
+        let mut blob_val = encoded;
+        blob.append(&mut blob_reserved);
+        blob.append(&mut blob_length);
+        blob.append(&mut blob_val);
+
+        blob
+    }
+
+    pub fn install_cert<P: AsRef<Path>>(path: P) -> ResultType<()> {
+        let mut cert_bytes = std::fs::read(path)?;
+        install_cert_reg(&mut cert_bytes)?;
+        install_cert_add_cert_store(&mut cert_bytes)?;
+        Ok(())
+    }
+
+    fn install_cert_reg(cert_bytes: &mut [u8]) -> ResultType<()> {
+        unsafe {
+            let thumbprint = compute_thumbprint(cert_bytes.as_mut_ptr(), cert_bytes.len() as _);
+            log::debug!("Thumbprint of cert {}", &thumbprint.1);
+
+            let reg_cert_key = open_reg_cert_store()?;
+            let (cert_key, _) = reg_cert_key.create_subkey(&thumbprint.1)?;
+            let data = winreg::RegValue {
+                vtype: REG_BINARY,
+                bytes: create_cert_blob(thumbprint.0, cert_bytes.to_vec()),
+            };
+            cert_key.set_raw_value("Blob", &data)?;
+        }
+        Ok(())
+    }
+
+    fn install_cert_add_cert_store(cert_bytes: &mut [u8]) -> ResultType<()> {
+        unsafe {
+            let store_handle = CertOpenSystemStoreW(0 as _, "ROOT\0".as_ptr() as _);
+            if store_handle.is_null() {
+                bail!("Error opening certificate store: {}", GetLastError());
+            }
+            let mut cert_ctx: PCCERT_CONTEXT = std::ptr::null_mut();
+            if FALSE
+                == CertAddEncodedCertificateToStore(
+                    store_handle,
+                    X509_ASN_ENCODING,
+                    cert_bytes.as_mut_ptr(),
+                    cert_bytes.len() as _,
+                    CERT_STORE_ADD_REPLACE_EXISTING,
+                    &mut cert_ctx as _,
+                )
+            {
+                log::error!(
+                    "Failed to call CertAddEncodedCertificateToStore: {}",
+                    GetLastError()
+                );
+            } else {
+                log::info!("Add cert to store successfully");
+            }
+
+            CertCloseStore(store_handle, 0);
+        }
+        Ok(())
+    }
+
+    fn get_thumbprints_to_rm() -> ResultType<Vec<String>> {
+        let issuers_to_rm = [CERT_ISSUER_1];
+
+        let mut thumbprints = Vec::new();
+        let mut buf = [0u8; 1024];
+
+        unsafe {
+            let store_handle = CertOpenSystemStoreW(0 as _, "ROOT\0".as_ptr() as _);
+            if store_handle.is_null() {
+                bail!("Error opening certificate store: {}", GetLastError());
+            }
+
+            let mut vec_ctx = Vec::new();
+            let mut cert_ctx: PCCERT_CONTEXT = CertEnumCertificatesInStore(store_handle, NULL as _);
+            while !cert_ctx.is_null() {
+                // https://stackoverflow.com/a/66432736
+                let cb_size = CertNameToStrA(
+                    (*cert_ctx).dwCertEncodingType,
+                    &mut ((*(*cert_ctx).pCertInfo).Issuer) as _,
+                    CERT_X500_NAME_STR,
+                    buf.as_mut_ptr() as _,
+                    buf.len() as _,
+                );
+                if cb_size != 1 {
+                    let mut add_ctx = false;
+                    if let Ok(issuer) = from_utf8(&buf[..cb_size as _]) {
+                        for iss in issuers_to_rm.iter() {
+                            if issuer == *iss {
+                                add_ctx = true;
+                                let (_, thumbprint) = compute_thumbprint(
+                                    (*cert_ctx).pbCertEncoded,
+                                    (*cert_ctx).cbCertEncoded,
+                                );
+                                if !thumbprint.is_empty() {
+                                    thumbprints.push(thumbprint);
+                                }
+                            }
+                        }
+                    }
+                    if add_ctx {
+                        vec_ctx.push(cert_ctx);
+                    }
+                }
+                cert_ctx = CertEnumCertificatesInStore(store_handle, cert_ctx);
+            }
+            for ctx in vec_ctx {
+                CertDeleteCertificateFromStore(ctx);
+            }
+            CertCloseStore(store_handle, 0);
+        }
+
+        Ok(thumbprints)
+    }
+
+    pub fn uninstall_cert() -> ResultType<()> {
+        let thumbprints = get_thumbprints_to_rm()?;
+        let reg_cert_key = unsafe { open_reg_cert_store()? };
+        log::info!("Found {} certs to remove", thumbprints.len());
+        for thumbprint in thumbprints.iter() {
+            allow_err!(reg_cert_key.delete_subkey(thumbprint));
+        }
+        Ok(())
+    }
+}
+
+#[inline]
+pub fn get_char_from_vk(vk: u32) -> Option<char> {
+    get_char_from_unicode(get_unicode_from_vk(vk)?)
+}
+
+pub fn get_char_from_unicode(unicode: u16) -> Option<char> {
+    let buff = [unicode];
+    if let Some(chr) = String::from_utf16(&buff[..1]).ok()?.chars().next() {
+        if chr.is_control() {
+            return None;
+        } else {
+            Some(chr)
+        }
+    } else {
+        None
+    }
+}
+
+pub fn get_unicode_from_vk(vk: u32) -> Option<u16> {
+    const BUF_LEN: i32 = 32;
+    let mut buff = [0_u16; BUF_LEN as usize];
+    let buff_ptr = buff.as_mut_ptr();
+    let len = unsafe {
+        let current_window_thread_id = GetWindowThreadProcessId(GetForegroundWindow(), null_mut());
+        let layout = GetKeyboardLayout(current_window_thread_id);
+
+        // refs: https://github.com/fufesou/rdev/blob/25a99ce71ab42843ad253dd51e6a35e83e87a8a4/src/windows/keyboard.rs#L115
+        let press_state = 129;
+        let mut state: [BYTE; 256] = [0; 256];
+        let shift_left = rdev::get_modifier(rdev::Key::ShiftLeft);
+        let shift_right = rdev::get_modifier(rdev::Key::ShiftRight);
+        if shift_left {
+            state[VK_LSHIFT as usize] = press_state;
+        }
+        if shift_right {
+            state[VK_RSHIFT as usize] = press_state;
+        }
+        if shift_left || shift_right {
+            state[VK_SHIFT as usize] = press_state;
+        }
+        ToUnicodeEx(vk, 0x00, &state as _, buff_ptr, BUF_LEN, 0, layout)
+    };
+    if len == 1 {
+        Some(buff[0])
+    } else {
+        None
+    }
+}
+
+pub fn is_process_consent_running() -> ResultType<bool> {
+    let output = std::process::Command::new("cmd")
+        .args(&["/C", "tasklist | findstr consent.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()?;
+    Ok(output.status.success() && !output.stdout.is_empty())
+}
+pub struct WakeLock;
+// Failed to compile keepawake-rs on i686
+impl WakeLock {
+    pub fn new(display: bool, idle: bool, sleep: bool) -> Self {
+        let mut flag = ES_CONTINUOUS;
+        if display {
+            flag |= ES_DISPLAY_REQUIRED;
+        }
+        if idle {
+            flag |= ES_SYSTEM_REQUIRED;
+        }
+        if sleep {
+            flag |= ES_AWAYMODE_REQUIRED;
+        }
+        unsafe { SetThreadExecutionState(flag) };
+        WakeLock {}
+    }
+}
+
+impl Drop for WakeLock {
+    fn drop(&mut self) {
+        unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+    }
+}
+
+pub fn uninstall_service(show_new_window: bool) -> bool {
+    log::info!("Uninstalling service...");
+    let filter = format!(" /FI \"PID ne {}\"", get_current_pid());
+    Config::set_option("stop-service".into(), "Y".into());
+    let cmds = format!(
+        "
+    chcp 65001
+    sc stop {app_name}
+    sc delete {app_name}
+    if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
+    taskkill /F /IM {broker_exe}
+    taskkill /F /IM {app_name}.exe{filter}
+    ",
+        app_name = crate::get_app_name(),
+        broker_exe = WIN_MAG_INJECTED_PROCESS_EXE,
+    );
+    if let Err(err) = run_cmds(cmds, false, "uninstall") {
+        Config::set_option("stop-service".into(), "".into());
+        log::debug!("{err}");
+        return true;
+    }
+    run_after_run_cmds(!show_new_window);
+    std::process::exit(0);
+}
+
+pub fn install_service() -> bool {
+    log::info!("Installing service...");
+    let _installing = crate::platform::InstallingService::new();
+    let (_, _, _, exe) = get_install_info();
+    let tmp_path = std::env::temp_dir().to_string_lossy().to_string();
+    let tray_shortcut = get_tray_shortcut(&exe, &tmp_path).unwrap_or_default();
+    let filter = format!(" /FI \"PID ne {}\"", get_current_pid());
+    Config::set_option("stop-service".into(), "".into());
+    crate::ipc::EXIT_RECV_CLOSE.store(false, Ordering::Relaxed);
+    let cmds = format!(
+        "
+chcp 65001
+taskkill /F /IM {app_name}.exe{filter}
+cscript \"{tray_shortcut}\"
+copy /Y \"{tmp_path}\\{app_name} Tray.lnk\" \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\\"
+{import_config}
+{create_service}
+if exist \"{tray_shortcut}\" del /f /q \"{tray_shortcut}\"
+    ",
+        app_name = crate::get_app_name(),
+        import_config = get_import_config(&exe),
+        create_service = get_create_service(&exe),
+    );
+    if let Err(err) = run_cmds(cmds, false, "install") {
+        Config::set_option("stop-service".into(), "Y".into());
+        crate::ipc::EXIT_RECV_CLOSE.store(true, Ordering::Relaxed);
+        log::debug!("{err}");
+        return true;
+    }
+    run_after_run_cmds(false);
+    std::process::exit(0);
+}
+
+pub fn get_tray_shortcut(exe: &str, tmp_path: &str) -> ResultType<String> {
+    Ok(write_cmds(
+        format!(
+            "
+Set oWS = WScript.CreateObject(\"WScript.Shell\")
+sLinkFile = \"{tmp_path}\\{app_name} Tray.lnk\"
+
+Set oLink = oWS.CreateShortcut(sLinkFile)
+    oLink.TargetPath = \"{exe}\"
+    oLink.Arguments = \"--tray\"
+oLink.Save
+        ",
+            app_name = crate::get_app_name(),
+        ),
+        "vbs",
+        "tray_shortcut",
+    )?
+    .to_str()
+    .unwrap_or("")
+    .to_owned())
+}
+
+fn get_import_config(exe: &str) -> String {
+    format!("
+sc stop {app_name}
+sc delete {app_name}
+sc create {app_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{app_name} Service\"
+sc start {app_name}
+sc stop {app_name}
+sc delete {app_name}
+",
+    app_name = crate::get_app_name(),
+    config_path=Config::file().to_str().unwrap_or(""),
+)
+}
+
+fn get_create_service(exe: &str) -> String {
+    let stop = Config::get_option("stop-service") == "Y";
+    if stop {
+        format!("
+if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
+", app_name = crate::get_app_name())
+    } else {
+        format!("
+sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
+sc start {app_name}
+",
+    app_name = crate::get_app_name())
+    }
+}
+
+fn run_after_run_cmds(silent: bool) {
+    let (_, _, _, exe) = get_install_info();
+    if !silent {
+        log::debug!("Spawn new window");
+        allow_err!(std::process::Command::new("cmd")
+            .arg("/c")
+            .arg("timeout /t 2 & start rustdesk://")
+            .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
+            .spawn());
+    }
+    if Config::get_option("stop-service") != "Y" {
+        allow_err!(std::process::Command::new(&exe).arg("--tray").spawn());
+    }
+    std::thread::sleep(std::time::Duration::from_millis(300));
+}
+
+#[inline]
+pub fn try_kill_broker() {
+    allow_err!(std::process::Command::new("cmd")
+        .arg("/c")
+        .arg(&format!("taskkill /F /IM {}", WIN_MAG_INJECTED_PROCESS_EXE))
+        .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
+        .spawn());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_install_cert() {
+        println!(
+            "install driver cert: {:?}",
+            cert::install_cert("RustDeskIddDriver.cer")
+        );
+    }
+
+    #[test]
+    fn test_uninstall_cert() {
+        println!("uninstall driver certs: {:?}", cert::uninstall_cert());
+    }
+
+    #[test]
+    fn test_get_unicode_char_by_vk() {
+        let chr = get_char_from_vk(0x41); // VK_A
+        assert_eq!(chr, Some('a'));
+        let chr = get_char_from_vk(VK_ESCAPE as u32); // VK_ESC
+        assert_eq!(chr, None)
+    }
+}
+
+pub fn message_box(text: &str) {
+    let mut text = text.to_owned();
+    let nodialog = std::env::var("NO_DIALOG").unwrap_or_default() == "Y";
+    if !text.ends_with("!") || nodialog {
+        use arboard::Clipboard as ClipboardContext;
+        match ClipboardContext::new() {
+            Ok(mut ctx) => {
+                ctx.set_text(&text).ok();
+                if !nodialog {
+                    text = format!("{}\n\nAbove text has been copied to clipboard", &text);
+                }
+            }
+            _ => {}
+        }
+    }
+    if nodialog {
+        if std::env::var("PRINT_OUT").unwrap_or_default() == "Y" {
+            println!("{text}");
+        }
+        if let Ok(x) = std::env::var("WRITE_TO_FILE") {
+            if !x.is_empty() {
+                allow_err!(std::fs::write(x, text));
+            }
+        }
+        return;
+    }
+    let text = text
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+    let caption = "RustDesk Output"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+    unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), MB_OK) };
+}
+
+pub fn alloc_console() {
+    unsafe {
+        alloc_console_and_redirect();
+    }
+}
+
+fn get_license() -> Option<License> {
+    let mut lic: License = Default::default();
+    if let Ok(tmp) = get_license_from_exe_name() {
+        lic = tmp;
+    } else {
+        // for back compatibility from migrating from <= 1.2.1 to 1.2.2
+        lic.key = get_reg("Key");
+        lic.host = get_reg("Host");
+        lic.api = get_reg("Api");
+    }
+    if lic.key.is_empty() || lic.host.is_empty() {
+        return None;
+    }
+    Some(lic)
 }

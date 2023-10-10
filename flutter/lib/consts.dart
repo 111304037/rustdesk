@@ -5,6 +5,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 
 const double kDesktopRemoteTabBarHeight = 28.0;
+const int kInvalidWindowId = -1;
 const int kMainWindowId = 0;
 
 const String kPeerPlatformWindows = "Windows";
@@ -12,9 +13,14 @@ const String kPeerPlatformLinux = "Linux";
 const String kPeerPlatformMacOS = "Mac OS";
 const String kPeerPlatformAndroid = "Android";
 
+const double kScrollbarThickness = 12.0;
+
 /// [kAppTypeMain] used by 'Desktop Main Page' , 'Mobile (Client and Server)', "Install Page"
 const String kAppTypeMain = "main";
+
+/// [kAppTypeConnectionManager] only for 'Desktop CM Page'
 const String kAppTypeConnectionManager = "cm";
+
 const String kAppTypeDesktopRemote = "remote";
 const String kAppTypeDesktopFileTransfer = "file transfer";
 const String kAppTypeDesktopPortForward = "port forward";
@@ -27,13 +33,32 @@ const String kWindowEventHide = "hide";
 const String kWindowEventShow = "show";
 const String kWindowConnect = "connect";
 
+const String kWindowEventNewRemoteDesktop = "new_remote_desktop";
+const String kWindowEventNewFileTransfer = "new_file_transfer";
+const String kWindowEventNewPortForward = "new_port_forward";
+const String kWindowEventActiveSession = "active_session";
+const String kWindowEventGetRemoteList = "get_remote_list";
+const String kWindowEventGetSessionIdList = "get_session_id_list";
+
+const String kWindowEventMoveTabToNewWindow = "move_tab_to_new_window";
+const String kWindowEventGetCachedSessionData = "get_cached_session_data";
+
+const String kOptionOpenNewConnInTabs = "enable-open-new-connections-in-tabs";
+const String kOptionOpenInTabs = "allow-open-in-tabs";
+const String kOptionOpenInWindows = "allow-open-in-windows";
+const String kOptionForceAlwaysRelay = "force-always-relay";
+
 const String kUniLinksPrefix = "rustdesk://";
+const String kUrlActionClose = "close";
 
 const String kTabLabelHomePage = "Home";
 const String kTabLabelSettingPage = "Settings";
 
 const String kWindowPrefix = "wm_";
 const int kWindowMainId = 0;
+
+const String kPointerEventKindTouch = "touch";
+const String kPointerEventKindMouse = "mouse";
 
 // the executable name of the portable version
 const String kEnvPortableExecutable = "RUSTDESK_APPNAME";
@@ -46,22 +71,15 @@ const int kMobileDefaultDisplayHeight = 1280;
 const int kDesktopDefaultDisplayWidth = 1080;
 const int kDesktopDefaultDisplayHeight = 720;
 
-const int kMobileMaxDisplayWidth = 720;
-const int kMobileMaxDisplayHeight = 1280;
+const int kMobileMaxDisplaySize = 1280;
+const int kDesktopMaxDisplaySize = 3840;
 
-const int kDesktopMaxDisplayWidth = 1920;
-const int kDesktopMaxDisplayHeight = 1080;
-
-const double kDesktopFileTransferNameColWidth = 200;
-const double kDesktopFileTransferModifiedColWidth = 120;
-const double kDesktopFileTransferMinimumWidth = 100;
-const double kDesktopFileTransferMaximumWidth = 300;
 const double kDesktopFileTransferRowHeight = 30.0;
 const double kDesktopFileTransferHeaderHeight = 25.0;
 
 EdgeInsets get kDragToResizeAreaPadding =>
     !kUseCompatibleUiMode && Platform.isLinux
-        ? stateGlobal.fullscreen || stateGlobal.maximize
+        ? stateGlobal.fullscreen || stateGlobal.isMaximized.value
             ? EdgeInsets.zero
             : EdgeInsets.all(5.0)
         : EdgeInsets.zero;
@@ -72,7 +90,8 @@ extension StringExtension on String {
   String get nonBreaking => replaceAll(' ', String.fromCharCode($nbsp));
 }
 
-const Size kConnectionManagerWindowSize = Size(300, 400);
+const Size kConnectionManagerWindowSizeClosedChat = Size(300, 490);
+const Size kConnectionManagerWindowSizeOpenChat = Size(700, 490);
 // Tabbar transition duration, now we remove the duration
 const Duration kTabTransitionDuration = Duration.zero;
 const double kEmptyMarginTop = 50;
@@ -116,6 +135,12 @@ const kRemoteScrollStyleAuto = 'scrollauto';
 
 /// [kRemoteScrollStyleBar] Scroll image with scroll bar.
 const kRemoteScrollStyleBar = 'scrollbar';
+
+/// [kScrollModeDefault] Mouse or touchpad, the default scroll mode.
+const kScrollModeDefault = 'default';
+
+/// [kScrollModeReverse] Mouse or touchpad, the reverse scroll mode.
+const kScrollModeReverse = 'reverse';
 
 /// [kRemoteImageQualityBest] Best image quality.
 const kRemoteImageQualityBest = 'best';

@@ -4,9 +4,18 @@ pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
+#[cfg(target_os = "windows")]
+pub mod windows;
+
+#[cfg(not(debug_assertions))]
 use crate::{config::Config, log};
+#[cfg(not(debug_assertions))]
 use std::process::exit;
 
+#[cfg(not(debug_assertions))]
+static mut GLOBAL_CALLBACK: Option<Box<dyn Fn()>> = None;
+
+#[cfg(not(debug_assertions))]
 extern "C" fn breakdown_signal_handler(sig: i32) {
     let mut stack = vec![];
     backtrace::trace(|frame| {
@@ -22,9 +31,20 @@ extern "C" fn breakdown_signal_handler(sig: i32) {
         s.contains(&"nouveau_pushbuf_kick")
             || s.to_lowercase().contains("nvidia")
             || s.contains("gdk_window_end_draw_frame")
+            || s.contains("glGetString")
     }) {
         Config::set_option("allow-always-software-render".to_string(), "Y".to_string());
         info = "Always use software rendering will be set.".to_string();
+        log::info!("{}", info);
+    }
+    if stack.iter().any(|s| {
+        s.to_lowercase().contains("nvidia")
+            || s.to_lowercase().contains("amf")
+            || s.to_lowercase().contains("mfx")
+            || s.contains("cuProfilerStop")
+    }) {
+        Config::set_option("enable-hwcodec".to_string(), "N".to_string());
+        info = "Perhaps hwcodec causing the crash, disable it first".to_string();
         log::info!("{}", info);
     }
     log::error!(
@@ -41,11 +61,21 @@ extern "C" fn breakdown_signal_handler(sig: i32) {
         )
         .ok();
     }
+    unsafe {
+        if let Some(callback) = &GLOBAL_CALLBACK {
+            callback()
+        }
+    }
     exit(0);
 }
 
-pub fn register_breakdown_handler() {
+#[cfg(not(debug_assertions))]
+pub fn register_breakdown_handler<T>(callback: T)
+where
+    T: Fn() + 'static,
+{
     unsafe {
+        GLOBAL_CALLBACK = Some(Box::new(callback));
         libc::signal(libc::SIGSEGV, breakdown_signal_handler as _);
     }
 }
