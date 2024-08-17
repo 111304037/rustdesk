@@ -24,17 +24,14 @@ class _MyGroupState extends State<MyGroup> {
   static TextEditingController searchUserController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Obx(() {
       if (!gFFI.userModel.isLogin) {
         return Center(
             child: ElevatedButton(
                 onPressed: loginDialog, child: Text(translate("Login"))));
+      } else if (gFFI.userModel.networkError.isNotEmpty) {
+        return netWorkErrorWidget();
       } else if (gFFI.groupModel.groupLoading.value && gFFI.groupModel.emtpy) {
         return const Center(
           child: CircularProgressIndicator(),
@@ -47,7 +44,10 @@ class _MyGroupState extends State<MyGroup> {
               err: gFFI.groupModel.groupLoadError,
               retry: null,
               close: () => gFFI.groupModel.groupLoadError.value = ''),
-          Expanded(child: isDesktop ? _buildDesktop() : _buildMobile())
+          Expanded(
+              child: (isDesktop || isWebDesktop)
+                  ? _buildDesktop()
+                  : _buildMobile())
         ],
       );
     });
@@ -83,7 +83,7 @@ class _MyGroupState extends State<MyGroup> {
               alignment: Alignment.topLeft,
               child: MyGroupPeerView(
                   menuPadding: widget.menuPadding,
-                  initPeers: gFFI.groupModel.peers)),
+                  getInitPeers: () => gFFI.groupModel.peers)),
         )
       ],
     );
@@ -115,7 +115,7 @@ class _MyGroupState extends State<MyGroup> {
               alignment: Alignment.topLeft,
               child: MyGroupPeerView(
                   menuPadding: widget.menuPadding,
-                  initPeers: gFFI.groupModel.peers)),
+                  getInitPeers: () => gFFI.groupModel.peers)),
         )
       ],
     );
@@ -164,7 +164,7 @@ class _MyGroupState extends State<MyGroup> {
           itemCount: items.length,
           itemBuilder: (context, index) => _buildUserItem(items[index]));
       var maxHeight = max(MediaQuery.of(context).size.height / 6, 100.0);
-      return isDesktop
+      return (isDesktop || isWebDesktop)
           ? listView
           : LimitedBox(maxHeight: maxHeight, child: listView);
     });

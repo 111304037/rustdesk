@@ -4,16 +4,18 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_hbb/main.dart';
+import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:get/get.dart';
 
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../common.dart';
 import '../consts.dart';
-import './state_model.dart';
 
 /// Mouse button enum.
 enum MouseButtons { left, right, wheel }
@@ -21,6 +23,128 @@ enum MouseButtons { left, right, wheel }
 const _kMouseEventDown = 'mousedown';
 const _kMouseEventUp = 'mouseup';
 const _kMouseEventMove = 'mousemove';
+
+class CanvasCoords {
+  double x = 0;
+  double y = 0;
+  double scale = 1.0;
+  double scrollX = 0;
+  double scrollY = 0;
+  ScrollStyle scrollStyle = ScrollStyle.scrollauto;
+  Size size = Size.zero;
+
+  CanvasCoords();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'x': x,
+      'y': y,
+      'scale': scale,
+      'scrollX': scrollX,
+      'scrollY': scrollY,
+      'scrollStyle':
+          scrollStyle == ScrollStyle.scrollauto ? 'scrollauto' : 'scrollbar',
+      'size': {
+        'w': size.width,
+        'h': size.height,
+      }
+    };
+  }
+
+  static CanvasCoords fromJson(Map<String, dynamic> json) {
+    final model = CanvasCoords();
+    model.x = json['x'];
+    model.y = json['y'];
+    model.scale = json['scale'];
+    model.scrollX = json['scrollX'];
+    model.scrollY = json['scrollY'];
+    model.scrollStyle = json['scrollStyle'] == 'scrollauto'
+        ? ScrollStyle.scrollauto
+        : ScrollStyle.scrollbar;
+    model.size = Size(json['size']['w'], json['size']['h']);
+    return model;
+  }
+
+  static CanvasCoords fromCanvasModel(CanvasModel model) {
+    final coords = CanvasCoords();
+    coords.x = model.x;
+    coords.y = model.y;
+    coords.scale = model.scale;
+    coords.scrollX = model.scrollX;
+    coords.scrollY = model.scrollY;
+    coords.scrollStyle = model.scrollStyle;
+    coords.size = model.size;
+    return coords;
+  }
+}
+
+class CursorCoords {
+  Offset offset = Offset.zero;
+
+  CursorCoords();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'offset_x': offset.dx,
+      'offset_y': offset.dy,
+    };
+  }
+
+  static CursorCoords fromJson(Map<String, dynamic> json) {
+    final model = CursorCoords();
+    model.offset = Offset(json['offset_x'], json['offset_y']);
+    return model;
+  }
+
+  static CursorCoords fromCursorModel(CursorModel model) {
+    final coords = CursorCoords();
+    coords.offset = model.offset;
+    return coords;
+  }
+}
+
+class RemoteWindowCoords {
+  RemoteWindowCoords(
+      this.windowRect, this.canvas, this.cursor, this.remoteRect);
+  Rect windowRect;
+  CanvasCoords canvas;
+  CursorCoords cursor;
+  Rect remoteRect;
+  Offset relativeOffset = Offset.zero;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'canvas': canvas.toJson(),
+      'cursor': cursor.toJson(),
+      'windowRect': rectToJson(windowRect),
+      'remoteRect': rectToJson(remoteRect),
+    };
+  }
+
+  static Map<String, dynamic> rectToJson(Rect r) {
+    return {
+      'l': r.left,
+      't': r.top,
+      'w': r.width,
+      'h': r.height,
+    };
+  }
+
+  static Rect rectFromJson(Map<String, dynamic> json) {
+    return Rect.fromLTWH(
+      json['l'],
+      json['t'],
+      json['w'],
+      json['h'],
+    );
+  }
+
+  RemoteWindowCoords.fromJson(Map<String, dynamic> json)
+      : windowRect = rectFromJson(json['windowRect']),
+        canvas = CanvasCoords.fromJson(json['canvas']),
+        cursor = CursorCoords.fromJson(json['cursor']),
+        remoteRect = rectFromJson(json['remoteRect']);
+}
 
 extension ToString on MouseButtons {
   String get value {
@@ -53,15 +177,122 @@ class PointerEventToRust {
   }
 }
 
+class ToReleaseKeys {
+  RawKeyEvent? lastLShiftKeyEvent;
+  RawKeyEvent? lastRShiftKeyEvent;
+  RawKeyEvent? lastLCtrlKeyEvent;
+  RawKeyEvent? lastRCtrlKeyEvent;
+  RawKeyEvent? lastLAltKeyEvent;
+  RawKeyEvent? lastRAltKeyEvent;
+  RawKeyEvent? lastLCommandKeyEvent;
+  RawKeyEvent? lastRCommandKeyEvent;
+  RawKeyEvent? lastSuperKeyEvent;
+
+  reset() {
+    lastLShiftKeyEvent = null;
+    lastRShiftKeyEvent = null;
+    lastLCtrlKeyEvent = null;
+    lastRCtrlKeyEvent = null;
+    lastLAltKeyEvent = null;
+    lastRAltKeyEvent = null;
+    lastLCommandKeyEvent = null;
+    lastRCommandKeyEvent = null;
+    lastSuperKeyEvent = null;
+  }
+
+  updateKeyDown(LogicalKeyboardKey logicKey, RawKeyDownEvent e) {
+    if (e.isAltPressed) {
+      if (logicKey == LogicalKeyboardKey.altLeft) {
+        lastLAltKeyEvent = e;
+      } else if (logicKey == LogicalKeyboardKey.altRight) {
+        lastRAltKeyEvent = e;
+      }
+    } else if (e.isControlPressed) {
+      if (logicKey == LogicalKeyboardKey.controlLeft) {
+        lastLCtrlKeyEvent = e;
+      } else if (logicKey == LogicalKeyboardKey.controlRight) {
+        lastRCtrlKeyEvent = e;
+      }
+    } else if (e.isShiftPressed) {
+      if (logicKey == LogicalKeyboardKey.shiftLeft) {
+        lastLShiftKeyEvent = e;
+      } else if (logicKey == LogicalKeyboardKey.shiftRight) {
+        lastRShiftKeyEvent = e;
+      }
+    } else if (e.isMetaPressed) {
+      if (logicKey == LogicalKeyboardKey.metaLeft) {
+        lastLCommandKeyEvent = e;
+      } else if (logicKey == LogicalKeyboardKey.metaRight) {
+        lastRCommandKeyEvent = e;
+      } else if (logicKey == LogicalKeyboardKey.superKey) {
+        lastSuperKeyEvent = e;
+      }
+    }
+  }
+
+  updateKeyUp(LogicalKeyboardKey logicKey, RawKeyUpEvent e) {
+    if (e.isAltPressed) {
+      if (logicKey == LogicalKeyboardKey.altLeft) {
+        lastLAltKeyEvent = null;
+      } else if (logicKey == LogicalKeyboardKey.altRight) {
+        lastRAltKeyEvent = null;
+      }
+    } else if (e.isControlPressed) {
+      if (logicKey == LogicalKeyboardKey.controlLeft) {
+        lastLCtrlKeyEvent = null;
+      } else if (logicKey == LogicalKeyboardKey.controlRight) {
+        lastRCtrlKeyEvent = null;
+      }
+    } else if (e.isShiftPressed) {
+      if (logicKey == LogicalKeyboardKey.shiftLeft) {
+        lastLShiftKeyEvent = null;
+      } else if (logicKey == LogicalKeyboardKey.shiftRight) {
+        lastRShiftKeyEvent = null;
+      }
+    } else if (e.isMetaPressed) {
+      if (logicKey == LogicalKeyboardKey.metaLeft) {
+        lastLCommandKeyEvent = null;
+      } else if (logicKey == LogicalKeyboardKey.metaRight) {
+        lastRCommandKeyEvent = null;
+      } else if (logicKey == LogicalKeyboardKey.superKey) {
+        lastSuperKeyEvent = null;
+      }
+    }
+  }
+
+  release(KeyEventResult Function(RawKeyEvent e) handleRawKeyEvent) {
+    for (final key in [
+      lastLShiftKeyEvent,
+      lastRShiftKeyEvent,
+      lastLCtrlKeyEvent,
+      lastRCtrlKeyEvent,
+      lastLAltKeyEvent,
+      lastRAltKeyEvent,
+      lastLCommandKeyEvent,
+      lastRCommandKeyEvent,
+      lastSuperKeyEvent,
+    ]) {
+      if (key != null) {
+        handleRawKeyEvent(RawKeyUpEvent(
+          data: key.data,
+          character: key.character,
+        ));
+      }
+    }
+  }
+}
+
 class InputModel {
   final WeakReference<FFI> parent;
-  String keyboardMode = "legacy";
+  String keyboardMode = '';
 
   // keyboard
   var shift = false;
   var ctrl = false;
   var alt = false;
   var command = false;
+
+  final ToReleaseKeys toReleaseKeys = ToReleaseKeys();
 
   // trackpad
   var _trackpadLastDelta = Offset.zero;
@@ -75,31 +306,43 @@ class InputModel {
 
   var _lastScale = 1.0;
 
+  bool _pointerMovedAfterEnter = false;
+
   // mouse
   final isPhysicalMouse = false.obs;
   int _lastButtons = 0;
   Offset lastMousePos = Offset.zero;
+
+  bool _queryOtherWindowCoords = false;
+  Rect? _windowRect;
+  List<RemoteWindowCoords> _remoteWindowCoords = [];
 
   late final SessionID sessionId;
 
   bool get keyboardPerm => parent.target!.ffiModel.keyboard;
   String get id => parent.target?.id ?? '';
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
+  bool get isViewOnly => parent.target!.ffiModel.viewOnly;
+  double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
 
   InputModel(this.parent) {
     sessionId = parent.target!.sessionId;
   }
 
-  KeyEventResult handleRawKeyEvent(FocusNode data, RawKeyEvent e) {
-    if (isDesktop && !stateGlobal.grabKeyboard) {
-      return KeyEventResult.handled;
-    }
-
+  // This function must be called after the peer info is received.
+  // Because `sessionGetKeyboardMode` relies on the peer version.
+  updateKeyboardMode() async {
     // * Currently mobile does not enable map mode
-    if (isDesktop) {
-      bind.sessionGetKeyboardMode(sessionId: sessionId).then((result) {
-        keyboardMode = result.toString();
-      });
+    if (isDesktop || isWebDesktop) {
+      keyboardMode = await bind.sessionGetKeyboardMode(sessionId: sessionId) ??
+          kKeyLegacyMode;
+    }
+  }
+
+  KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
+    if (isViewOnly) return KeyEventResult.handled;
+    if ((isDesktop || isWebDesktop) && !isInputSourceFlutter) {
+      return KeyEventResult.handled;
     }
 
     final key = e.logicalKey;
@@ -115,6 +358,7 @@ class InputModel {
           command = true;
         }
       }
+      toReleaseKeys.updateKeyDown(key, e);
     }
     if (e is RawKeyUpEvent) {
       if (key == LogicalKeyboardKey.altLeft ||
@@ -131,10 +375,12 @@ class InputModel {
           key == LogicalKeyboardKey.superKey) {
         command = false;
       }
+
+      toReleaseKeys.updateKeyUp(key, e);
     }
 
     // * Currently mobile does not enable map mode
-    if (isDesktop && keyboardMode == 'map') {
+    if ((isDesktop || isWebDesktop) && keyboardMode == 'map') {
       mapKeyboardMode(e);
     } else {
       legacyKeyboardMode(e);
@@ -320,12 +566,17 @@ class InputModel {
   }
 
   void enterOrLeave(bool enter) {
+    toReleaseKeys.release(handleRawKeyEvent);
+    _pointerMovedAfterEnter = false;
+
     // Fix status
     if (!enter) {
       resetModifiers();
     }
     _flingTimer?.cancel();
-    bind.sessionEnterOrLeave(sessionId: sessionId, enter: enter);
+    if (!isInputSourceFlutter) {
+      bind.sessionEnterOrLeave(sessionId: sessionId, enter: enter);
+    }
   }
 
   /// Send mouse movement event with distance in [x] and [y].
@@ -340,6 +591,7 @@ class InputModel {
 
   void onPointHoverImage(PointerHoverEvent e) {
     _stopFling = true;
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
     if (!isPhysicalMouse.value) {
       isPhysicalMouse.value = true;
@@ -352,7 +604,7 @@ class InputModel {
   void onPointerPanZoomStart(PointerPanZoomStartEvent e) {
     _lastScale = 1.0;
     _stopFling = true;
-
+    if (isViewOnly) return;
     if (peerPlatform == kPeerPlatformAndroid) {
       handlePointerEvent('touch', 'pan_start', e.position);
     }
@@ -360,6 +612,7 @@ class InputModel {
 
   // https://docs.flutter.dev/release/breaking-changes/trackpad-gestures
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent e) {
+    if (isViewOnly) return;
     if (peerPlatform != kPeerPlatformAndroid) {
       final scale = ((e.scale - _lastScale) * 1000).toInt();
       _lastScale = e.scale;
@@ -396,7 +649,8 @@ class InputModel {
     }
     if (x != 0 || y != 0) {
       if (peerPlatform == kPeerPlatformAndroid) {
-        handlePointerEvent('touch', 'pan_update', Offset(x.toDouble(), y.toDouble()));
+        handlePointerEvent(
+            'touch', 'pan_update', Offset(x.toDouble(), y.toDouble()));
       } else {
         bind.sessionSendMouse(
             sessionId: sessionId,
@@ -484,6 +738,10 @@ class InputModel {
   void onPointDownImage(PointerDownEvent e) {
     debugPrint("onPointDownImage ${e.kind}");
     _stopFling = true;
+    if (isDesktop) _queryOtherWindowCoords = true;
+    _remoteWindowCoords = [];
+    _windowRect = null;
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) {
       if (isPhysicalMouse.value) {
         isPhysicalMouse.value = false;
@@ -495,6 +753,8 @@ class InputModel {
   }
 
   void onPointUpImage(PointerUpEvent e) {
+    if (isDesktop) _queryOtherWindowCoords = false;
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
     if (isPhysicalMouse.value) {
       handleMouse(_getMouseEvent(e, _kMouseEventUp), e.position);
@@ -502,13 +762,41 @@ class InputModel {
   }
 
   void onPointMoveImage(PointerMoveEvent e) {
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
+    if (_queryOtherWindowCoords) {
+      Future.delayed(Duration.zero, () async {
+        _windowRect = await fillRemoteCoordsAndGetCurFrame(_remoteWindowCoords);
+      });
+      _queryOtherWindowCoords = false;
+    }
     if (isPhysicalMouse.value) {
       handleMouse(_getMouseEvent(e, _kMouseEventMove), e.position);
     }
   }
 
+  static Future<Rect?> fillRemoteCoordsAndGetCurFrame(
+      List<RemoteWindowCoords> remoteWindowCoords) async {
+    final coords =
+        await rustDeskWinManager.getOtherRemoteWindowCoordsFromMain();
+    final wc = WindowController.fromWindowId(kWindowId!);
+    try {
+      final frame = await wc.getFrame();
+      for (final c in coords) {
+        c.relativeOffset = Offset(
+            c.windowRect.left - frame.left, c.windowRect.top - frame.top);
+        remoteWindowCoords.add(c);
+      }
+      return frame;
+    } catch (e) {
+      // Unreachable code
+      debugPrint("Failed to get frame of window $kWindowId, it may be hidden");
+    }
+    return null;
+  }
+
   void onPointerSignalImage(PointerSignalEvent e) {
+    if (isViewOnly) return;
     if (e is PointerScrollEvent) {
       var dx = e.scrollDelta.dx.toInt();
       var dy = e.scrollDelta.dy.toInt();
@@ -552,22 +840,22 @@ class InputModel {
     return v;
   }
 
-  Offset setNearestEdge(double x, double y, Display d) {
-    double left = x - d.x;
-    double right = d.x + d.width - 1 - x;
-    double top = y - d.y;
-    double bottom = d.y + d.height - 1 - y;
+  Offset setNearestEdge(double x, double y, Rect rect) {
+    double left = x - rect.left;
+    double right = rect.right - 1 - x;
+    double top = y - rect.top;
+    double bottom = rect.bottom - 1 - y;
     if (left < right && left < top && left < bottom) {
-      x = d.x;
+      x = rect.left;
     }
     if (right < left && right < top && right < bottom) {
-      x = d.x + d.width - 1;
+      x = rect.right - 1;
     }
     if (top < left && top < right && top < bottom) {
-      y = d.y;
+      y = rect.top;
     }
     if (bottom < left && bottom < right && bottom < top) {
-      y = d.y + d.height - 1;
+      y = rect.bottom - 1;
     }
     return Offset(x, y);
   }
@@ -653,12 +941,19 @@ class InputModel {
         type = 'up';
         break;
       case _kMouseEventMove:
+        _pointerMovedAfterEnter = true;
         isMove = true;
         break;
       default:
         return;
     }
     evt['type'] = type;
+
+    if (type == 'down' && !_pointerMovedAfterEnter) {
+      // Move mouse to the position of the down event first.
+      lastMousePos = ui.Offset(x, y);
+      refreshMousePos();
+    }
 
     final pos = handlePointerDevicePos(
       kPointerEventKindMouse,
@@ -700,40 +995,107 @@ class InputModel {
     bool onExit = false,
     int buttons = kPrimaryMouseButton,
   }) {
+    final ffiModel = parent.target!.ffiModel;
+    CanvasCoords canvas =
+        CanvasCoords.fromCanvasModel(parent.target!.canvasModel);
+    Rect? rect = ffiModel.rect;
+
+    if (isMove) {
+      if (_remoteWindowCoords.isNotEmpty &&
+          _windowRect != null &&
+          !_isInCurrentWindow(x, y)) {
+        final coords =
+            findRemoteCoords(x, y, _remoteWindowCoords, devicePixelRatio);
+        if (coords != null) {
+          isMove = false;
+          canvas = coords.canvas;
+          rect = coords.remoteRect;
+          x -= coords.relativeOffset.dx / devicePixelRatio;
+          y -= coords.relativeOffset.dy / devicePixelRatio;
+        }
+      }
+    }
+
     y -= CanvasModel.topToEdge;
     x -= CanvasModel.leftToEdge;
-    final canvasModel = parent.target!.canvasModel;
-    final ffiModel = parent.target!.ffiModel;
     if (isMove) {
-      canvasModel.moveDesktopMouse(x, y);
+      parent.target!.canvasModel.moveDesktopMouse(x, y);
+    }
+
+    return _handlePointerDevicePos(
+      kind,
+      x,
+      y,
+      isMove,
+      canvas,
+      rect,
+      evtType,
+      onExit: onExit,
+      buttons: buttons,
+    );
+  }
+
+  bool _isInCurrentWindow(double x, double y) {
+    final w = _windowRect!.width / devicePixelRatio;
+    final h = _windowRect!.width / devicePixelRatio;
+    return x >= 0 && y >= 0 && x <= w && y <= h;
+  }
+
+  static RemoteWindowCoords? findRemoteCoords(double x, double y,
+      List<RemoteWindowCoords> remoteWindowCoords, double devicePixelRatio) {
+    x *= devicePixelRatio;
+    y *= devicePixelRatio;
+    for (final c in remoteWindowCoords) {
+      if (x >= c.relativeOffset.dx &&
+          y >= c.relativeOffset.dy &&
+          x <= c.relativeOffset.dx + c.windowRect.width &&
+          y <= c.relativeOffset.dy + c.windowRect.height) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  Point? _handlePointerDevicePos(
+    String kind,
+    double x,
+    double y,
+    bool moveInCanvas,
+    CanvasCoords canvas,
+    Rect? rect,
+    String evtType, {
+    bool onExit = false,
+    int buttons = kPrimaryMouseButton,
+  }) {
+    if (rect == null) {
+      return null;
     }
 
     final nearThr = 3;
-    var nearRight = (canvasModel.size.width - x) < nearThr;
-    var nearBottom = (canvasModel.size.height - y) < nearThr;
-    final d = ffiModel.display;
-    final imageWidth = d.width * canvasModel.scale;
-    final imageHeight = d.height * canvasModel.scale;
-    if (canvasModel.scrollStyle == ScrollStyle.scrollbar) {
-      x += imageWidth * canvasModel.scrollX;
-      y += imageHeight * canvasModel.scrollY;
+    var nearRight = (canvas.size.width - x) < nearThr;
+    var nearBottom = (canvas.size.height - y) < nearThr;
+    final imageWidth = rect.width * canvas.scale;
+    final imageHeight = rect.height * canvas.scale;
+    if (canvas.scrollStyle == ScrollStyle.scrollbar) {
+      x += imageWidth * canvas.scrollX;
+      y += imageHeight * canvas.scrollY;
 
       // boxed size is a center widget
-      if (canvasModel.size.width > imageWidth) {
-        x -= ((canvasModel.size.width - imageWidth) / 2);
+      if (canvas.size.width > imageWidth) {
+        x -= ((canvas.size.width - imageWidth) / 2);
       }
-      if (canvasModel.size.height > imageHeight) {
-        y -= ((canvasModel.size.height - imageHeight) / 2);
+      if (canvas.size.height > imageHeight) {
+        y -= ((canvas.size.height - imageHeight) / 2);
       }
     } else {
-      x -= canvasModel.x;
-      y -= canvasModel.y;
+      x -= canvas.x;
+      y -= canvas.y;
     }
 
-    x /= canvasModel.scale;
-    y /= canvasModel.scale;
-    if (canvasModel.scale > 0 && canvasModel.scale < 1) {
-      final step = 1.0 / canvasModel.scale - 1;
+    x /= canvas.scale;
+    y /= canvas.scale;
+    if (canvas.scale > 0 && canvas.scale < 1) {
+      final step = 1.0 / canvas.scale - 1;
       if (nearRight) {
         x += step;
       }
@@ -741,11 +1103,11 @@ class InputModel {
         y += step;
       }
     }
-    x += d.x;
-    y += d.y;
+    x += rect.left;
+    y += rect.top;
 
     if (onExit) {
-      final pos = setNearestEdge(x, y, d);
+      final pos = setNearestEdge(x, y, rect);
       x = pos.dx;
       y = pos.dy;
     }
@@ -756,15 +1118,18 @@ class InputModel {
       evtX = x.round();
       evtY = y.round();
     } catch (e) {
-      debugPrintStack(
-          label: 'canvasModel.scale value ${canvasModel.scale}, $e');
+      debugPrintStack(label: 'canvas.scale value ${canvas.scale}, $e');
       return null;
     }
 
-    int minX = d.x.toInt();
-    int maxX = (d.x + d.width).toInt() - 1;
-    int minY = d.y.toInt();
-    int maxY = (d.y + d.height).toInt() - 1;
+    int minX = rect.left.toInt();
+    // https://github.com/rustdesk/rustdesk/issues/6678
+    // For Windows, [0,maxX], [0,maxY] should be set to enable window snapping.
+    int maxX = (rect.left + rect.width).toInt() -
+        (peerPlatform == kPeerPlatformWindows ? 0 : 1);
+    int minY = rect.top.toInt();
+    int maxY = (rect.top + rect.height).toInt() -
+        (peerPlatform == kPeerPlatformWindows ? 0 : 1);
     evtX = trySetNearestRange(evtX, minX, maxX, 5);
     evtY = trySetNearestRange(evtY, minY, maxY, 5);
     if (kind == kPointerEventKindMouse) {
@@ -787,4 +1152,27 @@ class InputModel {
       platformFFI.stopDesktopWebListener();
     }
   }
+
+  void onMobileBack() => tap(MouseButtons.right);
+  void onMobileHome() => tap(MouseButtons.wheel);
+  Future<void> onMobileApps() async {
+    sendMouse('down', MouseButtons.wheel);
+    await Future.delayed(const Duration(milliseconds: 500));
+    sendMouse('up', MouseButtons.wheel);
+  }
+
+  // Simulate a key press event.
+  // `usbHidUsage` is the USB HID usage code of the key.
+  Future<void> tapHidKey(int usbHidUsage) async {
+    inputRawKey(kKeyFlutterKey, usbHidUsage, 0, true);
+    await Future.delayed(Duration(milliseconds: 100));
+    inputRawKey(kKeyFlutterKey, usbHidUsage, 0, false);
+  }
+
+  Future<void> onMobileVolumeUp() async =>
+      await tapHidKey(PhysicalKeyboardKey.audioVolumeUp.usbHidUsage);
+  Future<void> onMobileVolumeDown() async =>
+      await tapHidKey(PhysicalKeyboardKey.audioVolumeDown.usbHidUsage);
+  Future<void> onMobilePower() async =>
+      await tapHidKey(PhysicalKeyboardKey.power.usbHidUsage);
 }

@@ -15,7 +15,7 @@ import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/models/file_model.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
-import 'package:wakelock/wakelock.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../consts.dart';
 import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
@@ -53,11 +53,13 @@ class FileManagerPage extends StatefulWidget {
       {Key? key,
       required this.id,
       required this.password,
+      required this.isSharedPassword,
       required this.tabController,
       this.forceRelay})
       : super(key: key);
   final String id;
   final String? password;
+  final bool? isSharedPassword;
   final bool? forceRelay;
   final DesktopTabController tabController;
 
@@ -84,18 +86,22 @@ class _FileManagerPageState extends State<FileManagerPage>
     _ffi.start(widget.id,
         isFileTransfer: true,
         password: widget.password,
+        isSharedPassword: widget.isSharedPassword,
         forceRelay: widget.forceRelay);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ffi.dialogManager
           .showLoading(translate('Connecting...'), onCancel: closeConnection);
     });
-    Get.put(_ffi, tag: 'ft_${widget.id}');
-    if (!Platform.isLinux) {
-      Wakelock.enable();
+    Get.put<FFI>(_ffi, tag: 'ft_${widget.id}');
+    if (!isLinux) {
+      WakelockPlus.enable();
     }
     debugPrint("File manager page init success with id ${widget.id}");
     _ffi.dialogManager.setOverlayState(_overlayKeyState);
-    widget.tabController.onSelected?.call(widget.id);
+    // Call onSelected in post frame callback, since we cannot guarantee that the callback will not call setState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.tabController.onSelected?.call(widget.id);
+    });
   }
 
   @override
@@ -103,8 +109,8 @@ class _FileManagerPageState extends State<FileManagerPage>
     model.close().whenComplete(() {
       _ffi.close();
       _ffi.dialogManager.dismissAll();
-      if (!Platform.isLinux) {
-        Wakelock.disable();
+      if (!isLinux) {
+        WakelockPlus.disable();
       }
       Get.delete<FFI>(tag: 'ft_${widget.id}');
     });
@@ -182,10 +188,9 @@ class _FileManagerPageState extends State<FileManagerPage>
                       children: [
                         Transform.rotate(
                           angle: item.isRemoteToLocal ? pi : 0,
-                          child: SvgPicture.asset(
-                            "assets/arrow.svg",
-                            color: Theme.of(context).tabBarTheme.labelColor,
-                          ),
+                          child: SvgPicture.asset("assets/arrow.svg",
+                              colorFilter: svgColor(
+                                  Theme.of(context).tabBarTheme.labelColor)),
                         ).paddingOnly(left: 15),
                         const SizedBox(
                           width: 16.0,
@@ -257,22 +262,24 @@ class _FileManagerPageState extends State<FileManagerPage>
                             Offstage(
                               offstage: item.state != JobState.paused,
                               child: MenuButton(
+                                tooltip: translate("Resume"),
                                 onPressed: () {
                                   jobController.resumeJob(item.id);
                                 },
                                 child: SvgPicture.asset(
                                   "assets/refresh.svg",
-                                  color: Colors.white,
+                                  colorFilter: svgColor(Colors.white),
                                 ),
                                 color: MyTheme.accent,
                                 hoverColor: MyTheme.accent80,
                               ),
                             ),
                             MenuButton(
+                              tooltip: translate("Delete"),
                               padding: EdgeInsets.only(right: 15),
                               child: SvgPicture.asset(
                                 "assets/close.svg",
-                                color: Colors.white,
+                                colorFilter: svgColor(Colors.white),
                               ),
                               onPressed: () {
                                 jobController.jobTable.removeAt(index);
@@ -307,13 +314,14 @@ class _FileManagerPageState extends State<FileManagerPage>
                         children: [
                           SvgPicture.asset(
                             "assets/transfer.svg",
-                            color: Theme.of(context).tabBarTheme.labelColor,
+                            colorFilter: svgColor(
+                                Theme.of(context).tabBarTheme.labelColor),
                             height: 40,
                           ).paddingOnly(bottom: 10),
                           Text(
                             translate("No transfers in progress"),
                             textAlign: TextAlign.center,
-                            textScaleFactor: 1.20,
+                            textScaler: TextScaler.linear(1.20),
                             style: TextStyle(
                                 color:
                                     Theme.of(context).tabBarTheme.labelColor),
@@ -515,6 +523,7 @@ class _FileManagerViewState extends State<FileManagerView> {
               Row(
                 children: [
                   MenuButton(
+                    tooltip: translate('Back'),
                     padding: EdgeInsets.only(
                       right: 3,
                     ),
@@ -522,7 +531,8 @@ class _FileManagerViewState extends State<FileManagerView> {
                       quarterTurns: 2,
                       child: SvgPicture.asset(
                         "assets/arrow.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                     ),
                     color: Theme.of(context).cardColor,
@@ -533,11 +543,13 @@ class _FileManagerViewState extends State<FileManagerView> {
                     },
                   ),
                   MenuButton(
+                    tooltip: translate('Parent directory'),
                     child: RotatedBox(
                       quarterTurns: 3,
                       child: SvgPicture.asset(
                         "assets/arrow.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                     ),
                     color: Theme.of(context).cardColor,
@@ -596,6 +608,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                 switch (_locationStatus.value) {
                   case LocationStatus.bread:
                     return MenuButton(
+                      tooltip: translate('Search'),
                       onPressed: () {
                         _locationStatus.value = LocationStatus.fileSearchBar;
                         Future.delayed(
@@ -603,7 +616,8 @@ class _FileManagerViewState extends State<FileManagerView> {
                       },
                       child: SvgPicture.asset(
                         "assets/search.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                       color: Theme.of(context).cardColor,
                       hoverColor: Theme.of(context).hoverColor,
@@ -613,20 +627,23 @@ class _FileManagerViewState extends State<FileManagerView> {
                       onPressed: null,
                       child: SvgPicture.asset(
                         "assets/close.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                       color: Theme.of(context).disabledColor,
                       hoverColor: Theme.of(context).hoverColor,
                     );
                   case LocationStatus.fileSearchBar:
                     return MenuButton(
+                      tooltip: translate('Clear'),
                       onPressed: () {
                         onSearchText("", isLocal);
                         _locationStatus.value = LocationStatus.bread;
                       },
                       child: SvgPicture.asset(
                         "assets/close.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                       color: Theme.of(context).cardColor,
                       hoverColor: Theme.of(context).hoverColor,
@@ -634,6 +651,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                 }
               }),
               MenuButton(
+                tooltip: translate('Refresh File'),
                 padding: EdgeInsets.only(
                   left: 3,
                 ),
@@ -642,7 +660,8 @@ class _FileManagerViewState extends State<FileManagerView> {
                 },
                 child: SvgPicture.asset(
                   "assets/refresh.svg",
-                  color: Theme.of(context).tabBarTheme.labelColor,
+                  colorFilter:
+                      svgColor(Theme.of(context).tabBarTheme.labelColor),
                 ),
                 color: Theme.of(context).cardColor,
                 hoverColor: Theme.of(context).hoverColor,
@@ -658,6 +677,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                       isLocal ? MainAxisAlignment.start : MainAxisAlignment.end,
                   children: [
                     MenuButton(
+                      tooltip: translate('Home'),
                       padding: EdgeInsets.only(
                         right: 3,
                       ),
@@ -666,17 +686,34 @@ class _FileManagerViewState extends State<FileManagerView> {
                       },
                       child: SvgPicture.asset(
                         "assets/home.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                       color: Theme.of(context).cardColor,
                       hoverColor: Theme.of(context).hoverColor,
                     ),
                     MenuButton(
+                      tooltip: translate('Create Folder'),
                       onPressed: () {
                         final name = TextEditingController();
+                        String? errorText;
                         _ffi.dialogManager.show((setState, close, context) {
+                          name.addListener(() {
+                            if (errorText != null) {
+                              setState(() {
+                                errorText = null;
+                              });
+                            }
+                          });
                           submit() {
                             if (name.value.text.isNotEmpty) {
+                              if (!PathUtil.validName(name.value.text,
+                                  controller.options.value.isWindows)) {
+                                setState(() {
+                                  errorText = translate("Invalid folder name");
+                                });
+                                return;
+                              }
                               controller.createDir(PathUtil.join(
                                 controller.directory.value.path,
                                 name.value.text,
@@ -692,7 +729,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 SvgPicture.asset("assets/folder_new.svg",
-                                    color: MyTheme.accent),
+                                    colorFilter: svgColor(MyTheme.accent)),
                                 Text(
                                   translate("Create Folder"),
                                 ).paddingOnly(
@@ -708,6 +745,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                                     labelText: translate(
                                       "Please enter the folder name",
                                     ),
+                                    errorText: errorText,
                                   ),
                                   controller: name,
                                   autofocus: true,
@@ -734,12 +772,14 @@ class _FileManagerViewState extends State<FileManagerView> {
                       },
                       child: SvgPicture.asset(
                         "assets/folder_new.svg",
-                        color: Theme.of(context).tabBarTheme.labelColor,
+                        colorFilter:
+                            svgColor(Theme.of(context).tabBarTheme.labelColor),
                       ),
                       color: Theme.of(context).cardColor,
                       hoverColor: Theme.of(context).hoverColor,
                     ),
                     Obx(() => MenuButton(
+                          tooltip: translate('Delete'),
                           onPressed: SelectedItems.valid(selectedItems.items)
                               ? () async {
                                   await (controller
@@ -749,7 +789,8 @@ class _FileManagerViewState extends State<FileManagerView> {
                               : null,
                           child: SvgPicture.asset(
                             "assets/trash.svg",
-                            color: Theme.of(context).tabBarTheme.labelColor,
+                            colorFilter: svgColor(
+                                Theme.of(context).tabBarTheme.labelColor),
                           ),
                           color: Theme.of(context).cardColor,
                           hoverColor: Theme.of(context).hoverColor,
@@ -795,24 +836,24 @@ class _FileManagerViewState extends State<FileManagerView> {
                             quarterTurns: 2,
                             child: SvgPicture.asset(
                               "assets/arrow.svg",
-                              color: selectedItems.items.isEmpty
+                              colorFilter: svgColor(selectedItems.items.isEmpty
                                   ? Theme.of(context).brightness ==
                                           Brightness.light
                                       ? MyTheme.grayBg
                                       : MyTheme.darkGray
-                                  : Colors.white,
+                                  : Colors.white),
                               alignment: Alignment.bottomRight,
                             ),
                           ),
                     label: isLocal
                         ? SvgPicture.asset(
                             "assets/arrow.svg",
-                            color: selectedItems.items.isEmpty
+                            colorFilter: svgColor(selectedItems.items.isEmpty
                                 ? Theme.of(context).brightness ==
                                         Brightness.light
                                     ? MyTheme.grayBg
                                     : MyTheme.darkGray
-                                : Colors.white,
+                                : Colors.white),
                           )
                         : Text(
                             translate('Receive'),
@@ -870,6 +911,7 @@ class _FileManagerViewState extends State<FileManagerView> {
         menuPos = RelativeRect.fromLTRB(x, y, x, y);
       },
       child: MenuButton(
+        tooltip: translate('More'),
         onPressed: () => mod_menu.showMenu(
           context: context,
           position: menuPos,
@@ -889,7 +931,7 @@ class _FileManagerViewState extends State<FileManagerView> {
         ),
         child: SvgPicture.asset(
           "assets/dots.svg",
-          color: Theme.of(context).tabBarTheme.labelColor,
+          colorFilter: svgColor(Theme.of(context).tabBarTheme.labelColor),
         ),
         color: Theme.of(context).cardColor,
         hoverColor: Theme.of(context).hoverColor,
@@ -959,6 +1001,7 @@ class _FileManagerViewState extends State<FileManagerView> {
           final lastModifiedStr = entry.isDrive
               ? " "
               : "${entry.lastModified().toString().replaceAll(".000", "")}   ";
+          var secondaryPosition = RelativeRect.fromLTRB(0, 0, 0, 0);
           return Padding(
             padding: EdgeInsets.symmetric(vertical: 1),
             child: Obx(() => Container(
@@ -1000,9 +1043,10 @@ class _FileManagerViewState extends State<FileManagerView> {
                                                 entry.isFile
                                                     ? "assets/file.svg"
                                                     : "assets/folder.svg",
-                                                color: Theme.of(context)
-                                                    .tabBarTheme
-                                                    .labelColor,
+                                                colorFilter: svgColor(
+                                                    Theme.of(context)
+                                                        .tabBarTheme
+                                                        .labelColor),
                                               ),
                                         Expanded(
                                             child: Text(entry.name.nonBreaking,
@@ -1021,6 +1065,35 @@ class _FileManagerViewState extends State<FileManagerView> {
                                 }
                                 _onSelectedChanged(
                                     items, filteredEntries, entry, isLocal);
+                              },
+                              onSecondaryTap: () {
+                                final items = [
+                                  if (!entry.isDrive &&
+                                      versionCmp(_ffi.ffiModel.pi.version,
+                                              "1.3.0") >=
+                                          0)
+                                    mod_menu.PopupMenuItem(
+                                      child: Text("Rename"),
+                                      height: CustomPopupMenuTheme.height,
+                                      onTap: () {
+                                        controller.renameAction(entry, isLocal);
+                                      },
+                                    )
+                                ];
+                                if (items.isNotEmpty) {
+                                  mod_menu.showMenu(
+                                    context: context,
+                                    position: secondaryPosition,
+                                    items: items,
+                                  );
+                                }
+                              },
+                              onSecondaryTapDown: (details) {
+                                secondaryPosition = RelativeRect.fromLTRB(
+                                    details.globalPosition.dx,
+                                    details.globalPosition.dy,
+                                    details.globalPosition.dx,
+                                    details.globalPosition.dy);
                               },
                             ),
                             SizedBox(
@@ -1127,9 +1200,13 @@ class _FileManagerViewState extends State<FileManagerView> {
   void _onSelectedChanged(SelectedItems selectedItems, List<Entry> entries,
       Entry entry, bool isLocal) {
     final isCtrlDown = RawKeyboard.instance.keysPressed
-        .contains(LogicalKeyboardKey.controlLeft);
-    final isShiftDown =
-        RawKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.shiftLeft);
+            .contains(LogicalKeyboardKey.controlLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlRight);
+    final isShiftDown = RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftRight);
     if (isCtrlDown) {
       if (selectedItems.items.contains(entry)) {
         selectedItems.remove(entry);
@@ -1281,7 +1358,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                     onPointerSignal: (e) {
                       if (e is PointerScrollEvent) {
                         final sc = _breadCrumbScroller;
-                        final scale = Platform.isWindows ? 2 : 4;
+                        final scale = isWindows ? 2 : 4;
                         sc.jumpTo(sc.offset + e.scrollDelta.dy / scale);
                       }
                     },
@@ -1444,7 +1521,7 @@ class _FileManagerViewState extends State<FileManagerView> {
           _locationStatus.value == LocationStatus.pathLocation
               ? "assets/folder.svg"
               : "assets/search.svg",
-          color: Theme.of(context).tabBarTheme.labelColor,
+          colorFilter: svgColor(Theme.of(context).tabBarTheme.labelColor),
         ),
         Expanded(
           child: TextField(
