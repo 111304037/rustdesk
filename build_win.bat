@@ -6,7 +6,7 @@ set LIBCLANG_PATH=%LLVM_ROOT%\bin
 set VPX_LIB_DIR=%VCPKG_ROOT%\installed\x64-windows-static
 set LD_LIBRARY_PATH=%VCPKG_ROOT%\installed\x64-windows-static
 
-set PY_ROOT=E:\MyFiles\Python\Python38
+set PY_ROOT=B:\MyFiles\Python\Python38
 set PY_PIP=%PY_ROOT%\Scripts
 set PY_LIBS=%PY_ROOT%\Lib\site-packages
 
@@ -29,7 +29,7 @@ set PATH=%env_rustdesk_build%;%LD_LIBRARY_PATH%;%PY_ROOT%;%PY_PIP%;%PY_LIBS%;%VC
 @REM vcpkg_cli probe libvpx
 @REM vcpkg list
 @REM cargo build
-::cargo run
+cargo run
 ::cargo clean
 ::cargo cache
 
