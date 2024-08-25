@@ -6,21 +6,20 @@ RootDir=$(cd `dirname $0`; pwd)
 echo "RootDir=$RootDir"
 cd ${RootDir}
 
-export CARGO_ROOT=/Users/game-netease/.cargo/bin
-export VCPKG_ROOT=${RootDir}/deps/vcpkg/vcpkg
-export PATH=${CARGO_ROOT}:$HOME/fvm/default/bin:${VCPKG_ROOT}:$PATH
-
-source $HOME/.cargo/env
+source ${RootDir}/env_mac.sh
 source ~/.bashrc
 echo "PATH=$PATH"
+echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
+# chmod +x ${VCPKG_ROOT}/bootstrap-vcpkg.sh
 # ${VCPKG_ROOT}/bootstrap-vcpkg.sh -disableMetrics
 # ${VCPKG_ROOT}/vcpkg install libvpx libyuv opus aom
 
 # # rustup-init
-# rustup default 1.80.1
+# rustup default 1.75.0
 # rustup component add rustfmt
 
+# cd ${RootDir}/libs/portable/
 # python3 -m pip install --upgrade pip
 # pip3 install -r requirements.txt
 
