@@ -1,0 +1,37 @@
+#!/bin/sh -e
+
+
+echo "dirname=$0"
+RootDir=$(cd `dirname $0`; pwd)
+echo "RootDir=$RootDir"
+cd ${RootDir}
+
+source ${RootDir}/env_mac.sh
+source ~/.bashrc
+echo "PATH=$PATH"
+echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
+# chmod +x ${VCPKG_ROOT}/bootstrap-vcpkg.sh
+# ${VCPKG_ROOT}/bootstrap-vcpkg.sh -disableMetrics
+# ${VCPKG_ROOT}/vcpkg install libvpx libyuv opus aom
+
+# # rustup-init
+# rustup default 1.75.0
+# rustup component add rustfmt
+
+# cd ${RootDir}/libs/portable/
+# python3 -m pip install --upgrade pip
+# pip3 install -r requirements.txt
+
+# wget https://github.com/c-smile/sciter-sdk/raw/master/bin.osx/libsciter.dylib
+# brew tap leoafarias/fvm
+# brew install fvm cocoapods
+# fvm global 3.16.9
+# cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
+
+# #Sciter版本
+# python3 build.py
+
+# #Flutter版本
+# # flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+# # python3 ./build.py --flutter
