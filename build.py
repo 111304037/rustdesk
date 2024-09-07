@@ -633,4 +633,6 @@ def md5_file(fn):
 if __name__ == "__main__":
     PKG_CONFIG_PATH = os.environ.get('PKG_CONFIG_PATH')
     print("PKG_CONFIG_PATH:",PKG_CONFIG_PATH)
+    PATH = os.environ.get('PATH')
+    print("PATH:", PATH)
     main()

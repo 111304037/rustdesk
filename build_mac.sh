@@ -29,9 +29,23 @@ echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 # fvm global 3.16.9
 # cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
 
-# #Sciter版本
-# python3 build.py
+# #install flutter
+# brew tap leoafarias/fvm
+# brew install fvm cocoapods
+# fvm global 3.16.9
 
-# #Flutter版本
-# # flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
-# # python3 ./build.py --flutter
+# flutter --disable-analytics
+# dart --disable-analytics
+# flutter doctor -v
+# cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
+
+
+# #Sciter版本
+# python3 build.py > a.log
+
+#Flutter版本
+# flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+# python3 ./build.py --flutter
+
+
+cargo run
