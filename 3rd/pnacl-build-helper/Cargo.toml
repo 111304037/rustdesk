@@ -13,3 +13,4 @@ path = "src/lib.rs"
 [dependencies]
 tempdir = "0.3.5"
 walkdir = "1"
+filetime = "0.2"

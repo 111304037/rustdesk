@@ -1,12 +1,3 @@
-https://rustdesk.com/docs/zh-cn/dev/build/windows/
-cargo库缓存目录
-C:\Users\mengxingquan\.cargo\registry\src\github.com-1ecc6299db9ec823
-cargo install vcpkg_cli
-vcpkg_cli probe libvpx:x64-windows-static
-mkdir -p target/debug
-mv sciter.dll target/debug
-
-
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#free-public-servers">Servers</a> •

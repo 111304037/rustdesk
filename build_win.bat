@@ -38,9 +38,10 @@ set env_rustdesk_build=%env_vckpg%;%env_toolchain%;%PKG_CONFIG_PATH%;
 
 set PATH=%env_rustdesk_build%;%LD_LIBRARY_PATH%;%VCPKG_ROOT%;%LLVM_ROOT%;%PATH%;
 
-@REM set HTTP_PROXY=127.0.0.1:8899
-@REM set HTTPS_PROXY=127.0.0.1:8899
-@REM git config --global https.proxy 127.0.0.1:8899
+set HTTP_PROXY=10.227.199.162:808
+set HTTPS_PROXY=10.227.199.162:808
+git config --global http.proxy 10.227.199.162:808
+git config --global https.proxy 10.227.199.162:808
 
 @REM first init vcpkg
 @REM bootstrap-vcpkg.bat
@@ -50,10 +51,12 @@ set PATH=%env_rustdesk_build%;%LD_LIBRARY_PATH%;%VCPKG_ROOT%;%LLVM_ROOT%;%PATH%;
 @REM vcpkg install aom:x64-windows-static
 @REM vcpkg_cli probe libvpx
 @REM vcpkg list
-@REM cargo build
 @REM cargo run
 ::cargo clean
 ::cargo cache
+@REM cargo clean
+@REM cargo update
+@REM cargo build
 
 cmd /k
 

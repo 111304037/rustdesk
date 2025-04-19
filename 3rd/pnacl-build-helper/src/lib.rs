@@ -8,6 +8,7 @@ use std::default::Default;
 use std::process::{Command};
 use std::env::set_current_dir;
 use std::fmt;
+use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
@@ -391,6 +392,8 @@ impl ConfigureMake {
         self.make_only_dirs = None;
     }
 
+
+
     /// Do we need to rebuild this?
     pub fn is_fresh(&self) -> bool {
         use walkdir::WalkDir;
@@ -420,7 +423,7 @@ impl ConfigureMake {
                 }
 
                 let stat = stat.unwrap();
-                oldest_lib = min(oldest_lib, stat.mtime() as i64);
+                oldest_lib = min(oldest_lib, get_file_mtime(stat));
             }
 
             let mut newest_timestamp: i64 = 0;
@@ -439,7 +442,7 @@ impl ConfigureMake {
                     if !stat.is_ok() { continue; }
                     let stat = stat.unwrap();
 
-                    newest_timestamp = max(newest_timestamp, stat.mtime() as i64);
+                    newest_timestamp = max(newest_timestamp, get_file_mtime(stat));
                 }
             }
 
@@ -535,6 +538,16 @@ impl ConfigureMake {
             println!("cargo:libdir={}", p.display());
         }
     }
+}
+
+fn get_file_mtime(metadata: Metadata) -> i64 {
+    // return metadata.mtime() as i64
+    return metadata
+        .modified()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
 }
 
 fn run_tool(mut cmd: Command) {
