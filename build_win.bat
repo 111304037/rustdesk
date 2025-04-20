@@ -19,10 +19,11 @@ set PATH=%PYTHONPATH%;%PATH%
 
 @REM rustdesk
 set env_toolchain=%~dp0\deps\toolchain-windows\bin
+
+@REM vcpkg
 set VCPKG_ROOT=%~dp0\deps\vcpkg\vcpkg
 set VPX_LIB_DIR=%VCPKG_ROOT%\installed\x64-windows-static
 set LD_LIBRARY_PATH=%VCPKG_ROOT%\installed\x64-windows-static
-
 set pkg_vpx=%VCPKG_ROOT%\packages\libvpx_x64-windows-static\lib\pkgconfig
 set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%PKG_CONFIG_PAT%
 
@@ -60,6 +61,9 @@ set VCPKG_DEFAULT_TRIPLET_OVERRIDE=x64-windows-tuna
 @REM cargo run
 ::cargo clean
 ::cargo cache
+
+set CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
+set RUST_BACKTRACE=full
 @REM cargo clean
 @REM cargo update
 @REM cargo build
