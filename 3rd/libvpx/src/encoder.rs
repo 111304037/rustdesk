@@ -6,12 +6,13 @@ use crate::common::VPXCodec;
 use crate::ffi::*;
 
 use std::mem::MaybeUninit;
+use std::os::raw::c_ulong;
 use std::ptr;
 
-use crate::data::frame::{Frame, FrameBufferConv, MediaKind};
-use crate::data::packet::Packet;
-use crate::data::pixel::formats::YUV420;
-use crate::data::pixel::Formaton;
+use av_data::frame::{Frame, FrameBufferConv, MediaKind};
+use av_data::packet::Packet;
+use av_data::pixel::formats::YUV420;
+use av_data::pixel::Formaton;
 
 use self::vpx_codec_err_t::*;
 
@@ -217,7 +218,7 @@ impl VP9Encoder {
                 frame.t.pts.unwrap(),
                 1,
                 0,
-                u32::from(VPX_DL_GOOD_QUALITY),
+                c_ulong::from(VPX_DL_GOOD_QUALITY),
             )
         };
 
@@ -244,7 +245,7 @@ impl VP9Encoder {
                 0,
                 1,
                 0,
-                u32::from(VPX_DL_GOOD_QUALITY),
+                c_ulong::from(VPX_DL_GOOD_QUALITY),
             )
         };
 
@@ -287,27 +288,29 @@ impl VPXCodec for VP9Encoder {
 #[cfg(feature = "codec-trait")]
 mod encoder_trait {
     use super::*;
-    use crate::codec::encoder::*;
-    use crate::codec::error::*;
-    use crate::data::frame::ArcFrame;
-    use crate::data::params::{CodecParams, MediaKind, VideoInfo};
-    use crate::data::value::Value;
+    use av_codec::encoder::*;
+    use av_codec::error::*;
+    use av_data::frame::ArcFrame;
+    use av_data::params::{CodecParams, MediaKind, VideoInfo};
+    use av_data::value::Value;
 
-    struct Des {
+    pub struct Des {
         descr: Descr,
     }
 
-    struct Enc {
+    pub struct Enc {
         cfg: VP9EncoderConfig,
         enc: Option<VP9Encoder>,
     }
 
     impl Descriptor for Des {
-        fn create(&self) -> Box<dyn Encoder> {
-            Box::new(Enc {
+        type OutputEncoder = Enc;
+
+        fn create(&self) -> Self::OutputEncoder {
+            Enc {
                 cfg: VP9EncoderConfig::new().unwrap(),
                 enc: None,
-            })
+            }
         }
 
         fn describe(&self) -> &Descr {
@@ -336,9 +339,7 @@ mod encoder_trait {
 
         fn send_frame(&mut self, frame: &ArcFrame) -> Result<()> {
             let enc = self.enc.as_mut().unwrap();
-            enc.encode(frame).map_err(|e| match e {
-                _ => unimplemented!(),
-            })
+            enc.encode(frame).map_err(|_| unimplemented!())
         }
 
         fn receive_packet(&mut self) -> Result<Packet> {
@@ -356,9 +357,7 @@ mod encoder_trait {
 
         fn flush(&mut self) -> Result<()> {
             let enc = self.enc.as_mut().unwrap();
-            enc.flush().map_err(|e| match e {
-                _ => unimplemented!(),
-            })
+            enc.flush().map_err(|_| unimplemented!())
         }
 
         fn set_option<'a>(&mut self, key: &str, val: Value<'a>) -> Result<()> {
@@ -451,7 +450,7 @@ mod encoder_trait {
     /// VP9 Encoder
     ///
     /// To be used with [av-codec](https://docs.rs/av-codec) `Encoder Context`.
-    pub const VP9_DESCR: &dyn Descriptor = &Des {
+    pub const VP9_DESCR: &Des = &Des {
         descr: Descr {
             codec: "vp9",
             name: "vpx",
@@ -496,8 +495,8 @@ pub(crate) mod tests {
         e.control(VP8E_SET_CQ_LEVEL, 4).unwrap();
     }
 
-    use crate::data::rational::*;
-    use crate::data::timeinfo::TimeInfo;
+    use av_data::rational::*;
+    use av_data::timeinfo::TimeInfo;
     pub fn setup(w: u32, h: u32, t: &TimeInfo) -> VP9Encoder {
         let mut c = VP9EncoderConfig::new().unwrap();
         c.cfg.g_w = w;
@@ -516,8 +515,8 @@ pub(crate) mod tests {
     }
 
     pub fn setup_frame(w: u32, h: u32, t: &TimeInfo) -> Frame {
-        use crate::data::frame::*;
-        use crate::data::pixel::formats;
+        use av_data::frame::*;
+        use av_data::pixel::formats;
         use std::sync::Arc;
 
         let v = VideoInfo::new(
@@ -528,7 +527,7 @@ pub(crate) mod tests {
             Arc::new(*formats::YUV420),
         );
 
-        new_default_frame(v, Some(t.clone()))
+        Frame::new_default_frame(v, Some(t.clone()))
     }
 
     #[test]
@@ -574,8 +573,9 @@ pub(crate) mod tests {
     #[test]
     fn encode_codec_trait() {
         use super::VP9_DESCR;
-        use crate::codec::encoder::*;
-        use crate::codec::error::*;
+        use av_codec::common::CodecList;
+        use av_codec::encoder::*;
+        use av_codec::error::*;
         use std::sync::Arc;
 
         let encoders = Codecs::from_list(&[VP9_DESCR]);

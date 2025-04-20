@@ -9,38 +9,44 @@ use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Arc;
 
-use crate::data::frame::{new_default_frame, FrameType};
-use crate::data::frame::{Frame, VideoInfo};
-use crate::data::pixel::formats::YUV420;
+use av_data::frame::{Frame, FrameBufferCopy, FrameType, VideoInfo};
+use av_data::pixel::formats::YUV420;
 
 use self::vpx_codec_err_t::*;
 
 fn frame_from_img(img: vpx_image_t) -> Frame {
     use self::vpx_img_fmt_t::*;
-    let f = match img.fmt {
+
+    let format = match img.fmt {
         VPX_IMG_FMT_I420 => YUV420,
         _ => panic!("TODO: support more pixel formats"),
     };
-    let v = VideoInfo::new(
+    let video = VideoInfo::new(
         img.d_w as usize,
         img.d_h as usize,
         false,
         FrameType::OTHER,
-        Arc::new(*f),
+        Arc::new(*format),
     );
 
-    let mut f = new_default_frame(v, None);
+    let mut frame = Frame::new_default_frame(video, None);
 
     let src = img
         .planes
         .iter()
         .zip(img.stride.iter())
-        .map(|(v, l)| unsafe { std::slice::from_raw_parts(*v as *const u8, *l as usize) });
+        .zip(format.iter())
+        .map(|((plane, line), chromaton)| unsafe {
+            std::slice::from_raw_parts(
+                *plane as *const u8,
+                *line as usize * chromaton.map(|c| c.get_height(img.h as usize)).unwrap_or(0),
+            )
+        });
 
-    let linesize = img.stride.iter().map(|l| *l as usize);
+    let linesize = img.stride.iter().map(|line| *line as usize);
 
-    f.copy_from_slice(src, linesize);
-    f
+    frame.copy_from_slice(src, linesize);
+    frame
 }
 
 use std::marker::PhantomData;
@@ -53,6 +59,7 @@ pub struct VP9Decoder<T> {
 }
 
 unsafe impl<T: Send> Send for VP9Decoder<T> {} // TODO: Make sure it cannot be abused
+unsafe impl<T: Sync> Sync for VP9Decoder<T> {} // TODO: Make sure it cannot be abused
 
 impl<T> VP9Decoder<T> {
     /// Create a new decoder
@@ -83,7 +90,7 @@ impl<T> VP9Decoder<T> {
                     iter: ptr::null(),
                     private_data: PhantomData,
                 })
-            },
+            }
             _ => Err(ret),
         }
     }
@@ -123,7 +130,9 @@ impl<T> VP9Decoder<T> {
         match ret {
             VPX_CODEC_OK => Ok(()),
             _ => {
-                let _ = unsafe { Box::from_raw(priv_data) };
+                if !priv_data.is_null() {
+                    let _ = unsafe { Box::from_raw(priv_data) };
+                }
                 Err(ret)
             }
         }
@@ -186,20 +195,22 @@ impl<T> VPXCodec for VP9Decoder<T> {
 #[cfg(feature = "codec-trait")]
 mod decoder_trait {
     use super::*;
-    use crate::codec::decoder::*;
-    use crate::codec::error::*;
-    use crate::data::frame::ArcFrame;
-    use crate::data::packet::Packet;
-    use crate::data::timeinfo::TimeInfo;
+    use av_codec::decoder::*;
+    use av_codec::error::*;
+    use av_data::frame::ArcFrame;
+    use av_data::packet::Packet;
+    use av_data::timeinfo::TimeInfo;
     use std::sync::Arc;
 
-    struct Des {
+    pub struct Des {
         descr: Descr,
     }
 
     impl Descriptor for Des {
-        fn create(&self) -> Box<dyn Decoder> {
-            Box::new(VP9Decoder::new().unwrap())
+        type OutputDecoder = VP9Decoder<TimeInfo>;
+
+        fn create(&self) -> Self::OutputDecoder {
+            VP9Decoder::new().unwrap()
         }
 
         fn describe(&self) -> &Descr {
@@ -234,7 +245,7 @@ mod decoder_trait {
     /// VP9 Decoder
     ///
     /// To be used with [av-codec](https://docs.rs/av-codec) `Context`.
-    pub const VP9_DESCR: &dyn Descriptor = &Des {
+    pub const VP9_DESCR: &Des = &Des {
         descr: Descr {
             codec: "vp9",
             name: "vpx",
@@ -259,8 +270,8 @@ mod tests {
 
     use super::super::encoder::tests as enc;
     use super::super::encoder::VPXPacket;
-    use crate::data::rational::*;
-    use crate::data::timeinfo::TimeInfo;
+    use av_data::rational::*;
+    use av_data::timeinfo::TimeInfo;
     #[test]
     fn decode() {
         let w = 800;
@@ -288,9 +299,7 @@ mod tests {
             loop {
                 let p = e.get_packet();
 
-                if p.is_none() {
-                    break;
-                } else if let VPXPacket::Packet(ref pkt) = p.unwrap() {
+                if let Some(VPXPacket::Packet(ref pkt)) = p {
                     d.decode(&pkt.data, None).unwrap();
 
                     // No multiframe expected.
@@ -298,6 +307,8 @@ mod tests {
                         out = 1;
                         println!("{:#?}", f);
                     }
+                } else {
+                    break;
                 }
             }
         }
@@ -312,10 +323,10 @@ mod tests {
     fn decode_codec_trait() {
         use super::super::decoder::VP9_DESCR as DEC;
         use super::super::encoder::VP9_DESCR as ENC;
-        use crate::codec::common::CodecList;
-        use crate::codec::decoder as de;
-        use crate::codec::encoder as en;
-        use crate::codec::error::*;
+        use av_codec::common::CodecList;
+        use av_codec::decoder as de;
+        use av_codec::encoder as en;
+        use av_codec::error::*;
         use std::sync::Arc;
 
         let encoders = en::Codecs::from_list(&[ENC]);
