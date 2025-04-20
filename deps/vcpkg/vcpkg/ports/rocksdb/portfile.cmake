@@ -2,10 +2,11 @@ vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO facebook/rocksdb
   REF "v${VERSION}"
-  SHA512 5bfe6a0e66d210121364b34630fc98cab5878b82761ab338cfaaa2cb543064f0e2abd98bb4cb087b2baf7582afa041e293eceb5c30e85e43f3ca1a3dcb36ab37
+  SHA512 4fcd509eb6b937277df7d09ab23039b445105352c4b153efd94b78f8bb2d5631699b0b551066a02f9e8f35e929550aaf78365fc9ac347882c59e85e97a9dc9d2
   HEAD_REF main
   PATCHES
     0001-fix-dependencies.patch
+    0002-fix-android.patch
 )
 
 string(COMPARE EQUAL "${VCPKG_CRT_LINKAGE}" "dynamic" WITH_MD_LIBRARY)

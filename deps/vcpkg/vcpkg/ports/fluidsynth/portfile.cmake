@@ -10,7 +10,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO FluidSynth/fluidsynth
     REF "v${VERSION}"
-    SHA512 35eaea8c1709ebbd5dee8f3946ab59c39afe31d92b972a44013fa23987aa48936f7d1326d5bda81c6e66f02bf988e48601367d49276a4dd78dbca7a2571f5e57
+    SHA512 cf41eb338fccaafaa6961b8ca9eec6e8f0e35d25ec8f1d6f621fc73bd4b43b301dfe027db4252424118d1772568b949542820777a74b651a3f32c5028a34ed61
     HEAD_REF master
     PATCHES
         gentables.patch
@@ -30,9 +30,9 @@ set(WINDOWS_OPTIONS enable-dsound enable-wasapi enable-waveout enable-winmidi HA
 set(MACOS_OPTIONS enable-coreaudio enable-coremidi COREAUDIO_FOUND COREMIDI_FOUND)
 set(LINUX_OPTIONS enable-alsa ALSA_FOUND)
 set(ANDROID_OPTIONS enable-opensles OpenSLES_FOUND)
-set(IGNORED_OPTIONS enable-coverage enable-dbus enable-floats enable-fpe-check enable-framework enable-jack enable-lash
+set(IGNORED_OPTIONS enable-coverage enable-dbus enable-floats enable-fpe-check enable-framework enable-jack
     enable-libinstpatch enable-midishare enable-oboe enable-openmp enable-oss enable-pipewire enable-portaudio
-    enable-profiling enable-readline enable-sdl2 enable-systemd enable-trap-on-fpe enable-ubsan)
+    enable-profiling enable-readline enable-sdl2 enable-sdl3 enable-systemd enable-trap-on-fpe enable-ubsan)
 
 if(VCPKG_TARGET_IS_WINDOWS)
     set(OPTIONS_TO_ENABLE ${WINDOWS_OPTIONS})
@@ -49,7 +49,7 @@ elseif(VCPKG_TARGET_IS_ANDROID)
 endif()
 
 foreach(_option IN LISTS OPTIONS_TO_ENABLE)
-    list(APPEND ENABLED_OPTIONS "-D{_option}:BOOL=ON")
+    list(APPEND ENABLED_OPTIONS "-D${_option}:BOOL=ON")
 endforeach()
     
 foreach(_option IN LISTS OPTIONS_TO_DISABLE IGNORED_OPTIONS)

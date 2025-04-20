@@ -28,20 +28,26 @@ set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%
 
 set env_nasm=%VCPKG_ROOT%\downloads\tools\nasm\nasm-2.15.05
 set env_perl=%VCPKG_ROOT%\downloads\tools\perl\5.32.1.1\perl\bin
-set env_cmake=%VCPKG_ROOT%\downloads\tools\cmake-3.29.2-windows\cmake-3.29.2-windows-i386\bin
+set env_cmake=%VCPKG_ROOT%\downloads\tools\cmake-3.30.1-windows\cmake-3.30.1-windows-i386\bin
 set env_vckpg=%env_nasm%;%env_perl%;%env_cmake%;
 
 set VCPKGRS_DYNAMIC=1
-set LLVM_ROOT=D:\Program Files\LLVM
+set LLVM_ROOT=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64
 set LIBCLANG_PATH=%LLVM_ROOT%\bin
 set env_rustdesk_build=%env_vckpg%;%env_toolchain%;%PKG_CONFIG_PATH%;
 
 set PATH=%env_rustdesk_build%;%LD_LIBRARY_PATH%;%VCPKG_ROOT%;%LLVM_ROOT%;%PATH%;
 
-set HTTP_PROXY=10.227.199.162:808
-set HTTPS_PROXY=10.227.199.162:808
-git config --global http.proxy 10.227.199.162:808
-git config --global https.proxy 10.227.199.162:808
+@REM set HTTP_PROXY=http://10.227.199.162:808
+@REM set HTTPS_PROXY=http://10.227.199.162:808
+git config --global http.proxy http://10.227.199.162:808
+git config --global https.proxy http://10.227.199.162:808
+
+@REM git config --global --unset http.proxy
+@REM git config --global --unset https.proxy
+set VCPKG_KEEP_ENV_VARS=MSYS2_MIRROR
+set MSYS2_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/msys2
+set VCPKG_DEFAULT_TRIPLET_OVERRIDE=x64-windows-tuna
 
 @REM first init vcpkg
 @REM bootstrap-vcpkg.bat
