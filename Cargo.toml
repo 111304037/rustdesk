@@ -1,5 +1,6 @@
 [patch.crates-io]
 pnacl-build-helper = { path = "./3rd/pnacl-build-helper" }
+libvpx = { path = "./3rd/libvpx" }
 
 [package]
 name = "rustdesk"
