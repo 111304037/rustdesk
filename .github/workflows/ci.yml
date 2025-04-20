@@ -4,9 +4,8 @@ env:
 #   MIN_SUPPORTED_RUST_VERSION: "1.46.0"
 #   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-  # vcpkg version: 2024.06.15
   # for multiarch gcc compatibility
-  VCPKG_COMMIT_ID: "f7423ee180c4b7f40d43402c2feb3859161ef625"
+  VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
 
 on:
   workflow_dispatch:
@@ -45,6 +44,8 @@ jobs:
   #   steps:
   #   - name: Checkout source code
   #     uses: actions/checkout@v3
+  #     with:
+  #       submodules: recursive
 
   #   - name: Install rust toolchain (v${{ env.MIN_SUPPORTED_RUST_VERSION }})
   #     uses: actions-rs/toolchain@v1
@@ -92,6 +93,8 @@ jobs:
 
     - name: Checkout source code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
     - name: Install prerequisites
       shell: bash

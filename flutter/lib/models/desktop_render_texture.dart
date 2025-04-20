@@ -181,6 +181,7 @@ class TextureModel {
   }
 
   updateCurrentDisplay(int curDisplay) {
+    if (isWeb) return;
     final ffi = parent.target;
     if (ffi == null) return;
     tryCreateTexture(int idx) {
@@ -224,6 +225,17 @@ class TextureModel {
   }
 
   onRemotePageDispose(bool closeSession) async {
+    final ffi = parent.target;
+    if (ffi == null) return;
+    for (final texture in _pixelbufferRenderTextures.values) {
+      await texture.destroy(closeSession, ffi);
+    }
+    for (final texture in _gpuRenderTextures.values) {
+      await texture.destroy(closeSession, ffi);
+    }
+  }
+
+  onViewCameraPageDispose(bool closeSession) async {
     final ffi = parent.target;
     if (ffi == null) return;
     for (final texture in _pixelbufferRenderTextures.values) {
