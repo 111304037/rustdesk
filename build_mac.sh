@@ -46,6 +46,7 @@ echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 #Flutter版本
 # flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
 # python3 ./build.py --flutter
-
-
+echo ==========
+brew install pkgconf
+# vcpkg install --triplet x64-osx
 cargo run
