@@ -18,12 +18,15 @@ export PKG_CONFIG_PATH=${RootDir}/deps/vcpkg/vcpkg/installed/x64-osx/lib/pkgconf
 export LD_LIBRARY_PATH=${VCPKG_ROOT}\installed\x64-osx\lib
 export VPX_LIB_DIR=${VCPKG_ROOT}\installed\x64-osx\lib
 export VPX_INCLUDE_DIR=${VCPKG_ROOT}\installed\x64-osx\include
+export VCPKG_DEFAULT_TRIPLET=arm64-osx-dynamic
+export VCPKGRS_DYNAMIC=1
 
-
+# path
 export PATH=$HOME/fvm/default/bin:$PATH
 export PATH=${PKG_CONFIG_PATH}:${CARGO_ROOT}:$HOME/fvm/default/bin:${VCPKG_ROOT}:$PATH
 
-
+export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
+export RUST_BACKTRACE=full
 
 source $HOME/.cargo/env
 source ~/.bashrc
