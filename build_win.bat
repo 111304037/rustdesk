@@ -27,14 +27,13 @@ set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%
 set LD_LIBRARY_PATH=%VCPKG_ROOT%\installed\x64-windows-static\lib
 set VPX_LIB_DIR=%VCPKG_ROOT%\installed\x64-windows-static\lib
 set VPX_INCLUDE_DIR=%VCPKG_ROOT%\installed\x64-windows-static\include
-
+set VCPKGRS_DYNAMIC=1
 
 set env_nasm=%VCPKG_ROOT%\downloads\tools\nasm\nasm-2.15.05
 set env_perl=%VCPKG_ROOT%\downloads\tools\perl\5.32.1.1\perl\bin
 set env_cmake=%VCPKG_ROOT%\downloads\tools\cmake-3.30.1-windows\cmake-3.30.1-windows-i386\bin
 set env_vckpg=%env_nasm%;%env_perl%;%env_cmake%;
 
-set VCPKGRS_DYNAMIC=1
 set LLVM_ROOT=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64
 set LIBCLANG_PATH=%LLVM_ROOT%\bin
 set env_rustdesk_build=%env_vckpg%;%env_toolchain%;%PKG_CONFIG_PATH%;%LIBCLANG_PATH%;
