@@ -58,11 +58,11 @@ cargo update
 # #Sciter版本
 # python3 build.py > a.log
 
-cargo build --verbose
-if [ ! -f "$RootDir/target/debug/libsciter.dylib" ]; then
-    echo "cp $RootDir/deps/libsciter.dylib => $RootDir/target/debug/libsciter.dylib"
-    cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
-fi
+# cargo build --verbose
+# if [ ! -f "$RootDir/target/debug/libsciter.dylib" ]; then
+#     echo "cp $RootDir/deps/libsciter.dylib => $RootDir/target/debug/libsciter.dylib"
+#     cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
+# fi
 # cargo run
 # python3 build.py --portable --hwcodec --flutter --vram
 
@@ -71,29 +71,55 @@ fi
 brew tap leoafarias/fvm
 brew install fvm cocoapods
 # 安装 Flutter 版本 https://docs.flutter.cn/release/archive
-flutter_ver=3.29.3
+flutter_ver=3.24.0
 fvm install $flutter_ver
 # 设置全局flutter版本为
 fvm global $flutter_ver
 
 cd flutter
 fvm flutter clean
-fvm flutter pub cache clean
+# fvm flutter pub cache clean
 rm -rf .dart_tool/
 rm -rf build/
+rm -rf pubspec.lock
 fvm use $flutter_ver
-# 更新 Flutter 依赖
+# 更新 Flutter 依赖,包括CocoaPods
 fvm flutter pub get
-cd ..
+
+# cd macos
+# pod deintegrate
+# # pod cache clean --all
+# pod install
+
+cd ${RootDir}
+pwd
+
 
 
 # 显示当前 Flutter 版本
 echo "Flutter version:"
 flutter --version
+flutter --disable-analytics
+dart --disable-analytics
 flutter doctor -v
-cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
-flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
-python3 build.py --flutter --hwcodec --unix-file-copy-paste --portable
+
+# 安装 flutter_rust_bridge_codegen 工具
+# cargo uninstall flutter_rust_bridge_codegen
+cargo install flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+# 确保 Rust 代码已正确编译
+# cargo build --verbose
+# 生成绑定代码
+rm flutter/lib/generated_bridge.dart
+rm flutter/macos/Runner/bridge_generated.h
+echo "[*]flutter_rust_bridge_codegen --rust-input $RootDir/src/flutter_ffi.rs --dart-output $RootDir/flutter/lib/generated_bridge.dart --c-output $RootDir/flutter/macos/Runner/bridge_generated.h"
+flutter_rust_bridge_codegen --rust-input $RootDir/src/flutter_ffi.rs --dart-output $RootDir/flutter/lib/generated_bridge.dart --c-output $RootDir/flutter/macos/Runner/bridge_generated.h
+if [ $? -eq 0 ]; then
+    echo "✅ Codegen succeeded"
+
+    python3 build.py --flutter
+else
+    echo "❌ Codegen failed"
+fi
 
 
 exec $SHELL

@@ -316,6 +316,7 @@ def ffi_bindgen_function_refactor():
 
 
 def build_flutter_deb(version, features):
+    print("[*]build_flutter_deb")
     if not skip_cargo:
         system2(f'cargo build --features {features} --lib --release')
         ffi_bindgen_function_refactor()
@@ -402,6 +403,7 @@ def build_deb_from_folder(version, binary_folder):
 
 
 def build_flutter_dmg(version, features):
+    print("[*]build_flutter_dmg")
     if not skip_cargo:
         # set minimum osx build target, now is 10.14, which is the same as the flutter xcode project
         system2(
@@ -410,8 +412,13 @@ def build_flutter_dmg(version, features):
     system2(
         "cp target/release/liblibrustdesk.dylib target/release/librustdesk.dylib")
     os.chdir('flutter')
+    # 这里会间接触发 build_runner
+    print("[*]flutter build macos --release")
     system2('flutter build macos --release')
+    
+    print("[*]create-dmg")
     system2('cp -rf ../target/release/service ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS/')
+    #生成dmg被屏蔽了？？？
     '''
     system2(
         "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")
@@ -463,6 +470,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
 
 
 def main():
+    print("[*]build.py")
     global skip_cargo
     parser = make_parser()
     args = parser.parse_args()
