@@ -3,13 +3,13 @@ pnacl-build-helper = { path = "./3rd/pnacl-build-helper" }
 libvpx = { path = "./3rd/libvpx" }
 
 [package]
-name = "Rustdesk"
+name = "FuckDesk"
 version = "1.3.9"
-authors = ["rustdesk <info@rustdesk.com>"]
+authors = ["FuckDesk <info@FuckDesk.com>"]
 edition = "2021"
 build= "build.rs"
-description = "Rustdesk Remote Desktop"
-default-run = "Rustdesk"
+description = "FuckDesk Remote Desktop"
+default-run = "FuckDesk"
 rust-version = "1.75"
 
 [lib]
