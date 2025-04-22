@@ -25,16 +25,6 @@ export VCPKG_TARGET_TRIPLET=$VCPKG_DEFAULT_TRIPLET
 # set(VCPKG_LIBRARY_LINKAGE dynamic)  # 关键配置项
 # set(VCPKG_OSX_ARCHITECTURES arm64)
 
-# VPX Configuration
-export VPX_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
-export VPX_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH//lib
-export LIBVPX_INCLUDE_DIR=$LIBVPX_INCLUDE_DIR
-export LIBVPX_LIB_DIR=$VPX_LIB_DIR
-
-# OPUS Configuration
-export OPUS_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
-export OPUS_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib
-
 # Include Paths
 export CPATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPATH
 export C_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$C_INCLUDE_PATH
@@ -45,14 +35,24 @@ export LD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LD_LIBRARY_PA
 export DYLD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$DYLD_LIBRARY_PATH
 export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG_CONFIG_PATH
 
-# LIB pkgconfig
-## opus
-export PKG_CONFIG_PATH=/opt/homebrew/Cellar/opus/1.5.2/lib/pkgconfig:$PKG_CONFIG_PATH
-## ffmpeg
-export FFMPEG_DIR=/opt/homebrew/Cellar/ffmpeg/7.1.1_2
-export PKG_CONFIG_PATH=$FFMPEG_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
-export LIBRARY_PATH=$FFMPEG_DIR/lib:$LIBRARY_PATH
-export CPATH=$FFMPEG_DIR/include:$CPATH
+# # LIB pkgconfig
+# # VPX Configuration
+# export VPX_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
+# export VPX_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH//lib
+# export LIBVPX_INCLUDE_DIR=$LIBVPX_INCLUDE_DIR
+# export LIBVPX_LIB_DIR=$VPX_LIB_DIR
+
+# # OPUS Configuration
+# export OPUS_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
+# export OPUS_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib
+
+# ## opus
+# export PKG_CONFIG_PATH=/opt/homebrew/Cellar/opus/1.5.2/lib/pkgconfig:$PKG_CONFIG_PATH
+# ## ffmpeg
+# export FFMPEG_DIR=/opt/homebrew/Cellar/ffmpeg/7.1.1_2
+# export PKG_CONFIG_PATH=$FFMPEG_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
+# export LIBRARY_PATH=$FFMPEG_DIR/lib:$LIBRARY_PATH
+# export CPATH=$FFMPEG_DIR/include:$CPATH
 
 # PATH
 export PATH=$HOME/fvm/default/bin:$PATH

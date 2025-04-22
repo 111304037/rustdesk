@@ -38,6 +38,8 @@ vcpkg install --triplet=$VCPKG_TARGET_TRIPLET
 # 在清单模式下，默认值为${CMAKE_BINARY_DIR}/vcpkg_installed。
 # 在经典模式下，默认值为${VCPKG_ROOT}/installed。
 if [ -d "$RootDir/vcpkg_installed" ]; then
+    echo "link:${VCPKG_ROOT}/installed exist"
+else
     echo "link:${VCPKG_ROOT}/installed from $RootDir/vcpkg_installed"
     ln -s $RootDir/vcpkg_installed ${VCPKG_ROOT}/installed 
 fi
@@ -54,7 +56,7 @@ brew install fvm cocoapods
 fvm global 3.16.9
 
 # cargo clean
-cargo update
+# cargo update
 cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
 
 
@@ -66,7 +68,8 @@ cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
 # python3 ./build.py --flutter
 
 cargo build --verbose
-if [ -d "$RootDir/target/debug/libsciter.dylib" ]; then
+if [ ! -f "$RootDir/target/debug/libsciter.dylib" ]; then
+    echo "cp $RootDir/deps/libsciter.dylib => $RootDir/target/debug/libsciter.dylib"
     cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
 fi
 cargo run
