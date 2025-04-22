@@ -13,10 +13,11 @@ export CARGO_ROOT=/Users/game-netease/.cargo/bin
 
 # VCPKG Configuration
 export VCPKG_ROOT=${RootDir}/deps/vcpkg/vcpkg
+export VCPKG_ARCH=arm64-osx
 export VCPKG_DEFAULT_TRIPLET=arm64-osx
 export VCPKG_TARGET_TRIPLET=$VCPKG_DEFAULT_TRIPLET
-export VCPKG_ARCH=arm64-osx
-export VCPKGRS_DYNAMIC=1
+# mac使用的是静态库，屏蔽掉
+# export VCPKGRS_DYNAMIC=1
 
 # # arm64-osx-dynamic.cmake
 # set(VCPKG_TARGET_ARCHITECTURE arm64)
@@ -39,10 +40,19 @@ export CPATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPATH
 export C_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$C_INCLUDE_PATH
 export CPLUS_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPLUS_INCLUDE_PATH
 # Library Paths 
-export LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LIBRARY_PATH
+export LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:/opt/homebrew/lib:$LIBRARY_PATH
 export LD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LD_LIBRARY_PATH
 export DYLD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$DYLD_LIBRARY_PATH
 export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG_CONFIG_PATH
+
+# LIB pkgconfig
+## opus
+export PKG_CONFIG_PATH=/opt/homebrew/Cellar/opus/1.5.2/lib/pkgconfig:$PKG_CONFIG_PATH
+## ffmpeg
+export FFMPEG_DIR=/opt/homebrew/Cellar/ffmpeg/7.1.1_2
+export PKG_CONFIG_PATH=$FFMPEG_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
+export LIBRARY_PATH=$FFMPEG_DIR/lib:$LIBRARY_PATH
+export CPATH=$FFMPEG_DIR/include:$CPATH
 
 # PATH
 export PATH=$HOME/fvm/default/bin:$PATH

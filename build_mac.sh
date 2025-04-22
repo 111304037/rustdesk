@@ -28,15 +28,33 @@ echo "VPX_INCLUDE_DIR=$VPX_INCLUDE_DIR"
 cd ${RootDir}
 pwd
 
+echo ==========
+deps/vcpkg/vcpkg/bootstrap-vcpkg.sh
+# brew install pkgconf
+vcpkg --version
+vcpkg help triplet | grep -i osx
+# 安装vcpkg.json
+vcpkg install --triplet=$VCPKG_TARGET_TRIPLET
+# 在清单模式下，默认值为${CMAKE_BINARY_DIR}/vcpkg_installed。
+# 在经典模式下，默认值为${VCPKG_ROOT}/installed。
+if [ -d "$RootDir/vcpkg_installed" ]; then
+    echo "link:${VCPKG_ROOT}/installed from $RootDir/vcpkg_installed"
+    ln -s $RootDir/vcpkg_installed ${VCPKG_ROOT}/installed 
+fi
+
+
+pkg-config --libs opus
+pkg-config --libs libavcodec
+pkg-config --cflags libavcodec
+
 # wget https://github.com/c-smile/sciter-sdk/raw/master/bin.osx/libsciter.dylib
 # #install flutter
 brew tap leoafarias/fvm
 brew install fvm cocoapods
 fvm global 3.16.9
 
-# flutter --disable-analytics
-# dart --disable-analytics
-# flutter doctor -v
+# cargo clean
+cargo update
 cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
 
 
@@ -46,15 +64,13 @@ cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
 #Flutter版本
 # flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
 # python3 ./build.py --flutter
-echo ==========
-deps/vcpkg/vcpkg/bootstrap-vcpkg.sh
-# brew install pkgconf
-vcpkg --version
-vcpkg help triplet | grep -i osx
-# 安装vcpkg.json
-vcpkg install --triplet=$VCPKG_TARGET_TRIPLET
-# cargo run
-python3 build.py --flutter --hwcodec --unix-file-copy-paste
+
+cargo build --verbose
+if [ -d "$RootDir/target/debug/libsciter.dylib" ]; then
+    cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
+fi
+cargo run
+# python3 build.py --flutter --hwcodec --unix-file-copy-paste
 
 
 exec $SHELL
