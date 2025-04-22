@@ -1,5 +1,6 @@
 @echo on
 
+set RootDir=%~dp0
 @REM python
 set PythonLocation=E:\MyFiles\Python\Python38
 set PY_PIP=%PY_ROOT%\Scripts
@@ -20,14 +21,27 @@ set PATH=%PYTHONPATH%;%PATH%
 @REM rustdesk
 set env_toolchain=%~dp0\deps\toolchain-windows\bin
 
-@REM vcpkg
+@REM VCPKG Configuration
 set VCPKG_ROOT=%~dp0deps\vcpkg\vcpkg
-set pkg_vpx=%VCPKG_ROOT%\packages\libvpx_x64-windows-static\lib\pkgconfig
-set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%PKG_CONFIG_PAT%
-set LD_LIBRARY_PATH=%VCPKG_ROOT%\installed\x64-windows-static\lib
-set VPX_LIB_DIR=%VCPKG_ROOT%\installed\x64-windows-static\lib
-set VPX_INCLUDE_DIR=%VCPKG_ROOT%\installed\x64-windows-static\include
-set VCPKGRS_DYNAMIC=1
+set VCPKG_ARCH=x64-windows-static
+set VCPKG_DEFAULT_TRIPLET=x64-windows-static
+set VCPKG_TARGET_TRIPLET=%VCPKG_DEFAULT_TRIPLET%
+
+@REM Include Paths
+set CPATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%CPATH%
+set C_INCLUDE_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%C_INCLUDE_PATH%
+set CPLUS_INCLUDE_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%CPLUS_INCLUDE_PATH%
+@REM Library Paths 
+set LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%LIBRARY_PATH%
+set LD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%LD_LIBRARY_PATH%
+set DYLD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%DYLD_LIBRARY_PATH%
+set PKG_CONFIG_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib/pkgconfig;%PKG_CONFIG_PATH%
+
+@REM set pkg_vpx=%VCPKG_ROOT%\packages\libvpx_x64-windows-static\lib\pkgconfig
+@REM set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%PKG_CONFIG_PAT%
+@REM set VPX_LIB_DIR=%VCPKG_ROOT%\installed\x64-windows-static\lib
+@REM set VPX_INCLUDE_DIR=%VCPKG_ROOT%\installed\x64-windows-static\include
+@REM set VCPKGRS_DYNAMIC=1
 
 set env_nasm=%VCPKG_ROOT%\downloads\tools\nasm\nasm-2.15.05
 set env_perl=%VCPKG_ROOT%\downloads\tools\perl\5.32.1.1\perl\bin
@@ -54,22 +68,34 @@ set VCPKG_DEFAULT_TRIPLET_OVERRIDE=x64-windows-tuna
 clang --version
 
 @REM first init vcpkg
-@REM bootstrap-vcpkg.bat
+call deps/vcpkg/vcpkg/bootstrap-vcpkg.bat
+vcpkg --version
+vcpkg install --triplet=%VCPKG_TARGET_TRIPLET%
+if exist "%VCPKG_ROOT%\installed" (
+    echo link;%VCPKG_ROOT%\installed exist
+) else (
+    echo link;%VCPKG_ROOT%\installed from %RootDir%\vcpkg_installed
+    mklink /D "%VCPKG_ROOT%\installed" "%RootDir%\vcpkg_installed"
+)
 @REM vcpkg install libvpx:x64-windows-static
 @REM vcpkg install libyuv:x64-windows-static
 @REM vcpkg install opus:x64-windows-static
 @REM vcpkg install aom:x64-windows-static
 @REM vcpkg_cli probe libvpx
 @REM vcpkg list
+pkg-config --libs opus
+pkg-config --libs libavcodec
+pkg-config --cflags libavcodec
+
 @REM cargo run
 ::cargo clean
 ::cargo cache
 
 set CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
 set RUST_BACKTRACE=full
-@REM cargo clean
-@REM cargo update
-@REM cargo build
+cargo clean
+cargo update
+cargo build
 
 cmd /k
 
