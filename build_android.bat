@@ -1,5 +1,5 @@
 @echo on
-
+cd /d %~dp0
 
 @REM python
 set PythonLocation=E:\MyFiles\Python\Python38
@@ -25,7 +25,7 @@ set VPX_LIB_DIR=%VCPKG_ROOT%\installed\arm64-static\lib
 set VPX_INCLUDE_DIR=%VCPKG_ROOT%\installed\arm64-static\include
 
 
-set env_nasm=%VCPKG_ROOT%\downloads\tools\nasm\nasm-2.15.05
+set env_nasm=%VCPKG_ROOT%\downloads\tools\nasm\nasm-2.16.03
 set env_perl=%VCPKG_ROOT%\downloads\tools\perl\5.32.1.1\perl\bin
 @REM set env_cmake=%VCPKG_ROOT%\downloads\tools\cmake-3.30.1-windows\cmake-3.30.1-windows-i386\bin
 set env_vckpg=%env_nasm%;%env_perl%;%env_cmake%;
@@ -68,8 +68,6 @@ set RUST_BACKTRACE=full
 @REM cargo update
 @REM cargo build --target aarch64-linux-android
 
-python -V
-
 
 
 set ANDROID_SDK=B:\Android\sdk
@@ -79,6 +77,7 @@ if not exist "%ANDROID_SDK%" (
 
 set ANDROID_HOME=%ANDROID_SDK%
 set ANDROID_NDK=%ANDROID_SDK%\ndk\25.0.8775105
+set ANDROID_NDK_HOME=%ANDROID_NDK%
 set env_cmake=%ANDROID_SDK%\cmake\3.18.1\bin
 set CMAKE_TOOLCHAIN_FILE=%ANDROID_NDK%/build/cmake/android.toolchain.cmake
 set cmake_version=3.18.1
@@ -92,6 +91,17 @@ set PATH=%env_cmake%;%ANDROID_SDK%/cmdline-tools/latest/bin;%PATH%
 @REM git config --global https.proxy 127.0.0.1:8899
 
 
+REM build vcpkg
+if not exist deps\vcpkg\vcpkg.exe call deps\vcpkg\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+REM install required packages
+vcpkg install --triplet arm64-android
+
+python -V
+nasm -version
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Failed to install nasm for host platform
+    goto :END
+)
 
 cargo install flutter_rust_bridge_codegen
 cargo add libvpx
@@ -105,6 +115,8 @@ rustup target add aarch64-linux-android
 cargo install cargo-ndk
 @REM VCPKG_ROOT=$HOME/vcpkg ANDROID_NDK_HOME=$HOME/android-ndk-r23c flutter/ndk_arm64.sh
 cargo ndk --platform 25 --target aarch64-linux-android build --release --features flutter,hwcodec
+
+:END
 cmd /k
 
 
