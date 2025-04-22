@@ -6,18 +6,8 @@ RootDir=$(cd `dirname $0`; pwd)
 echo "RootDir=$RootDir"
 cd ${RootDir}
 
-source ${RootDir}/env_mac.sh
+source ${RootDir}/env_android.sh
 echo \n\n------------------------------------\n\n
-export ANDROID_SDK=/Users/game-netease/Library/Android/sdk
-export ANDROID_HOME=$ANDROID_SDK
-export ANDROID_NDK=$ANDROID_SDK/ndk/25.0.8775105
-export env_cmake=$ANDROID_SDK/cmake/3.18.1/bin
-export CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
-export PATH=$ANDROID_HOME:$env_cmake$:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
-
-
-
-source ~/.bashrc
 echo "PATH=$PATH"
 echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
