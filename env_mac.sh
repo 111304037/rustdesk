@@ -62,6 +62,10 @@ export PATH=${PKG_CONFIG_PATH}:${VCPKG_ROOT}:$PATH
 export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
 export RUST_BACKTRACE=full
 
+# #设置flutter中国镜像
+# export PUB_HOSTED_URL=https://pub.flutter-io.cn
+# export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+
 # Source cargo environment
 source $HOME/.cargo/env
 source ~/.bashrc

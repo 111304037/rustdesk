@@ -50,30 +50,50 @@ pkg-config --libs libavcodec
 pkg-config --cflags libavcodec
 
 # wget https://github.com/c-smile/sciter-sdk/raw/master/bin.osx/libsciter.dylib
-# #install flutter
-brew tap leoafarias/fvm
-brew install fvm cocoapods
-fvm global 3.16.9
 
 # cargo clean
-# cargo update
-cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
+cargo update
 
 
 # #Sciter版本
 # python3 build.py > a.log
-
-#Flutter版本
-# flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
-# python3 ./build.py --flutter
 
 cargo build --verbose
 if [ ! -f "$RootDir/target/debug/libsciter.dylib" ]; then
     echo "cp $RootDir/deps/libsciter.dylib => $RootDir/target/debug/libsciter.dylib"
     cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
 fi
-cargo run
-# python3 build.py --flutter --hwcodec --unix-file-copy-paste
+# cargo run
+# python3 build.py --portable --hwcodec --flutter --vram
+
+#Flutter版本
+# #install flutter
+brew tap leoafarias/fvm
+brew install fvm cocoapods
+# 安装 Flutter 版本 https://docs.flutter.cn/release/archive
+flutter_ver=3.29.3
+fvm install $flutter_ver
+# 设置全局flutter版本为
+fvm global $flutter_ver
+
+cd flutter
+fvm flutter clean
+fvm flutter pub cache clean
+rm -rf .dart_tool/
+rm -rf build/
+fvm use $flutter_ver
+# 更新 Flutter 依赖
+fvm flutter pub get
+cd ..
+
+
+# 显示当前 Flutter 版本
+echo "Flutter version:"
+flutter --version
+flutter doctor -v
+cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
+flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+python3 build.py --flutter --hwcodec --unix-file-copy-paste --portable
 
 
 exec $SHELL
