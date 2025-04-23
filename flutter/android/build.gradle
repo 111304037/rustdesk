@@ -1,8 +1,46 @@
+buildscript {
+    ext {
+        agp_version = '8.6.0'
+    }
+}
 allprojects {
     repositories {
         google()
         jcenter()
         maven { url 'https://jitpack.io' }
+    }
+
+    afterEvaluate {
+
+        if (project.plugins.hasPlugin("com.android.application")
+                || project.plugins.hasPlugin("com.android.library")) {
+
+            // if (project.name == "flutter_unity_widget") 
+            // {
+                // override version numbers if needed
+                project.android.compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
+                
+                // 检查项目是否应用了 Kotlin 插件
+                if (project.plugins.hasPlugin('org.jetbrains.kotlin.android')) {
+                    project.android.kotlinOptions {
+                        jvmTarget = JavaVersion.VERSION_17
+                    }
+                }
+                
+                project.android {
+                    // add namespace if it is missing
+                    if (namespace == null) {
+                        namespace = project.group
+                    }
+                    
+                    // you can also override stuff like compileSdk
+                    // compileSdk = 34
+                }
+            // }
+        }
     }
 }
 
