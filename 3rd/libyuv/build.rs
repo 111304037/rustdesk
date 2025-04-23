@@ -105,7 +105,9 @@ fn main() -> anyhow::Result<()> {
         // 如果下载失败，尝试复制本地文件
         if download_result.is_err() {
             println!("cargo:warning=Failed to download from {}, trying to use local file", url);
-            let source_path = "/Users/game-netease/rustdesk/deps/vcpkg/vcpkg/installed/arm64-android/lib/libyuv.a";
+            let VCPKG_ROOT = env::var("VCPKG_INSTALLED_ROOT").unwrap();
+            let VCPKG_TARGET_TRIPLET = env::var("VCPKG_TARGET_TRIPLET").unwrap();
+            let source_path = format!("{}/installed/{}/lib/libyuv.a", VCPKG_ROOT, VCPKG_TARGET_TRIPLET);
             if !is_exsit(source_path) {
                 panic!("Neither download succeeded nor local libyuv.a file found at: {}", source_path);
             }

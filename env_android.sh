@@ -18,19 +18,19 @@ export NDK_HOME="$ANDROID_NDK_HOME"
 # 添加 NDK 编译器到 PATH
 export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"
 
+# 设置 Android API 级别
+export ANDROID_PLATFORM=34
+export MODE=${MODE:=release}
 # 设置交叉编译相关环境变量
 export TARGET_AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
-export TARGET_CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android25-clang"
-export TARGET_CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android25-clang++"
+export TARGET_CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android$$ANDROID_PLATFORM-clang"
+export TARGET_CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android$$ANDROID_PLATFORM-clang++"
 
 # 设置 Rust 目标
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TARGET_CC"
 export CC_aarch64_linux_android="$TARGET_CC"
 export CXX_aarch64_linux_android="$TARGET_CXX"
 export AR_aarch64_linux_android="$TARGET_AR"
-
-# 设置 Android API 级别
-export ANDROID_PLATFORM=25
 
 
 # VCPKG Configuration
