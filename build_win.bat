@@ -3,6 +3,9 @@
 set RootDir=%~dp0
 @REM python
 set PythonLocation=E:\MyFiles\Python\Python38
+if not exist "%PythonLocation%" (
+	set PythonLocation=D:\App\Python310
+)
 set PY_PIP=%PY_ROOT%\Scripts
 set PY_DLLs=%PY_ROOT%\DLLs
 set PY_LIBS=%PY_ROOT%\Lib\site-packages
