@@ -8,6 +8,7 @@ cd ${RootDir}
 pwd
 
 source ${RootDir}/env_mac.sh
+echo \n\n------------------------------------\n\n
 source ~/.bashrc
 echo "PATH=$PATH"
 echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
@@ -29,7 +30,11 @@ cd ${RootDir}
 pwd
 
 echo ==========
-deps/vcpkg/vcpkg/bootstrap-vcpkg.sh
+if [ -f "$VCPKG_ROOT/vcpkg" ]; then
+    echo "file:${VCPKG_ROOT}/vcpkg exist"
+else
+    deps/vcpkg/vcpkg/bootstrap-vcpkg.sh
+fi
 # brew install pkgconf
 vcpkg --version
 vcpkg help triplet | grep -i osx
@@ -37,7 +42,7 @@ vcpkg help triplet | grep -i osx
 vcpkg install --triplet=$VCPKG_TARGET_TRIPLET
 # 在清单模式下，默认值为${CMAKE_BINARY_DIR}/vcpkg_installed。
 # 在经典模式下，默认值为${VCPKG_ROOT}/installed。
-if [ -d "$RootDir/vcpkg_installed" ]; then
+if [ -d "${VCPKG_ROOT}/installed" ]; then
     echo "link:${VCPKG_ROOT}/installed exist"
 else
     echo "link:${VCPKG_ROOT}/installed from $RootDir/vcpkg_installed"
@@ -91,11 +96,6 @@ fvm flutter pub get
 # # pod cache clean --all
 # pod install
 
-cd ${RootDir}
-pwd
-
-
-
 # 显示当前 Flutter 版本
 echo "Flutter version:"
 flutter --version
@@ -103,9 +103,22 @@ flutter --disable-analytics
 dart --disable-analytics
 flutter doctor -v
 
+
+cd ${RootDir}
+pwd
+
+
+
 # 安装 flutter_rust_bridge_codegen 工具
 # cargo uninstall flutter_rust_bridge_codegen
-cargo install flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+if ! command -v flutter_rust_bridge_codegen &> /dev/null; then
+    echo "正在安装 flutter_rust_bridge_codegen v1.80.0..."
+    cargo install flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+elif ! flutter_rust_bridge_codegen --version | grep -q "1.80.0"; then
+    echo "检测到版本不匹配，重新安装..."
+    cargo install --force flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+fi
+
 # 确保 Rust 代码已正确编译
 # cargo build --verbose
 # 生成绑定代码
