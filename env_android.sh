@@ -37,7 +37,7 @@ export CPATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPATH
 export C_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$C_INCLUDE_PATH
 export CPLUS_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPLUS_INCLUDE_PATH
 # Library Paths 
-export LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:/opt/homebrew/lib:$LIBRARY_PATH
+export LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LIBRARY_PATH
 export LD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LD_LIBRARY_PATH
 export DYLD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$DYLD_LIBRARY_PATH
 export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG_CONFIG_PATH
@@ -86,6 +86,7 @@ export CARGO_CFG_TARGET_ARCH=aarch64
 
 CROSS_COMPILE=`xcode-select --print-path`/Toolchains/XcodeDefault.xctoolchain/usr/bin/
 CROSS_TOP=`xcode-select --print-path`/Platforms/iPhoneOS.platform/Developer
+CROSS_SDK=iPhoneOS.sdk
 
 
 

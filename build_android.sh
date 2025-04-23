@@ -150,16 +150,17 @@ if [ $? -eq 0 ]; then
     ls $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/inttypes.h
     # 为 ARM64 设备添加目标支持
     # 生成文件
-    cargo install cargo-ndk
-    rustup target install aarch64-linux-android
+    # cargo install cargo-ndk
+    # rustup target install aarch64-linux-android
     rustup target add aarch64-linux-android
     echo "[!]run flutter/ndk_arm64.sh begin"
     # ./flutter/ndk_arm64.sh
-    cargo ndk --platform 25 --target arm64-v8a build --release --features flutter,hwcodec
+    # cargo ndk --platform 25 --target aarch64-linux-android build --release --features flutter,hwcodec
+    cargo build --target aarch64-linux-android --release --features flutter,hwcodec
     echo "[!]run flutter/ndk_arm64.sh end"
-    # 将生成的库移动到jniLibs目录中
-    mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
-    cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+    # # 将生成的库移动到jniLibs目录中
+    # mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+    # cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
     # cd flutter
     # fvm flutter build apk
 

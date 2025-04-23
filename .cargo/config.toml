@@ -6,6 +6,11 @@ rustflags = ["-C", "target-feature=+crt-static", "-C", "link-args=/NODEFAULTLIB:
 rustflags = [
     "-C", "link-args=-sectcreate __CGPreLoginApp __cgpreloginapp /dev/null",
 ]
+
+[target.aarch64-linux-android]
+linker = "/Users/game-netease/Library/Android/sdk/ndk/26.0.10792818/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android25-clang"
+ar = "/Users/game-netease/Library/Android/sdk/ndk/26.0.10792818/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+
 #[target.'cfg(target_os="linux")']
 # glibc-static required, this may fix https://github.com/rustdesk/rustdesk/issues/9103, but I do not want this big change
 # this is unlikely to help also, because the other so files still use libc dynamically
