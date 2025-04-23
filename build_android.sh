@@ -5,12 +5,14 @@ echo "dirname=$0"
 RootDir=$(cd `dirname $0`; pwd)
 echo "RootDir=$RootDir"
 cd ${RootDir}
+pwd
 
 source ${RootDir}/env_android.sh
-echo \n\n------------------------------------\n\n
+source ~/.bashrc
 echo "PATH=$PATH"
 echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
+echo "VPX_INCLUDE_DIR=$VPX_INCLUDE_DIR"
 # chmod +x ${VCPKG_ROOT}/bootstrap-vcpkg.sh
 # ${VCPKG_ROOT}/bootstrap-vcpkg.sh -disableMetrics
 # ${VCPKG_ROOT}/vcpkg install libvpx libyuv opus aom
@@ -23,33 +25,149 @@ echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 # python3 -m pip install --upgrade pip
 # pip3 install -r requirements.txt
 
+cd ${RootDir}
+pwd
+
+echo ==========
+if [ -f "$VCPKG_ROOT/vcpkg" ]; then
+    echo "file:${VCPKG_ROOT}/vcpkg exist"
+else
+    deps/vcpkg/vcpkg/bootstrap-vcpkg.sh
+fi
+# brew install pkgconf
+vcpkg --version
+vcpkg help triplet | grep -i osx
+# # 安装vcpkg.json
+# vcpkg install --triplet=$VCPKG_TARGET_TRIPLET
+# # 在清单模式下，默认值为${CMAKE_BINARY_DIR}/vcpkg_installed。
+# # 在经典模式下，默认值为${VCPKG_ROOT}/installed。
+# if [ -d "${VCPKG_ROOT}/installed" ]; then
+#     echo "link:${VCPKG_ROOT}/installed exist"
+# else
+#     echo "link:${VCPKG_ROOT}/installed from $RootDir/vcpkg_installed"
+#     ln -s $RootDir/vcpkg_installed ${VCPKG_ROOT}/installed 
+# fi
+
+echo "[!]pkg-config --libs opus"
+pkg-config --libs opus
+echo "[!]pkg-config --libs libavcodec"
+pkg-config --libs libavcodec
+echo "[!]pkg-config --cflags libavcodec"
+pkg-config --cflags libavcodec
+
 # wget https://github.com/c-smile/sciter-sdk/raw/master/bin.osx/libsciter.dylib
-# brew tap leoafarias/fvms
-# brew install fvm cocoapods
-# fvm global 3.16.9
-# cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid"
+
+# cargo clean
+# cargo update
+
 
 # #Sciter版本
-# python3 build.py
+# python3 build.py > a.log
 
-# #Flutter版本
-# # flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
-# # python3 ./build.py --flutter
+# cargo build --verbose
+# if [ ! -f "$RootDir/target/debug/libsciter.dylib" ]; then
+#     echo "cp $RootDir/deps/libsciter.dylib => $RootDir/target/debug/libsciter.dylib"
+#     cp -n "$RootDir/deps/libsciter.dylib" "$RootDir/target/debug/libsciter.dylib"
+# fi
+# cargo run
+# python3 build.py --portable --hwcodec --flutter --vram
 
-# install ffigen and llvm 
-dart pub global activate ffigen 5.0.1
-# on Ubuntu 18, it is: sudo apt install libclang-9-dev
-# sudo apt-get install libclang-dev
+#Flutter版本
+# #install flutter
+brew tap leoafarias/fvm
+brew install fvm cocoapods
+# 安装 Flutter 版本 https://docs.flutter.cn/release/archive
+flutter_ver=3.24.0
+fvm install $flutter_ver
+# 设置全局flutter版本为
+fvm global $flutter_ver
+
+cd flutter
+fvm flutter clean
+# fvm flutter pub cache clean
+rm -rf .dart_tool/
+rm -rf build/
+rm -rf pubspec.lock
+fvm use $flutter_ver
+# 更新 Flutter 依赖,包括CocoaPods
+fvm flutter pub get
+# 需要激活ffigen
+fvm dart pub global activate ffigen 8.0.2
+# cd android
+# pod deintegrate
+# # pod cache clean --all
+# pod install
+
+# 显示当前 Flutter 版本
+echo "Flutter version:"
+fvm flutter --version
+fvm flutter --disable-analytics
+fvm dart --disable-analytics
+fvm flutter doctor -v
+echo "[!]run build_android_deps.sh begin"
+if ! ./build_android_deps.sh "${ANDROID_TARGET}"; then
+    find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+        echo "$_1:"
+        echo "======"
+        cat "$_1"
+        echo "======"
+        echo ""
+    done
+    exit 1
+fi
+echo "[!]run build_android_deps.sh end"
+
+cd ${RootDir}
+pwd
 
 
-cargo install flutter_rust_bridge_codegen
-cargo add libvpx
-cargo add libyuv
-cargo add opus
-# cargo add aom
-cargo add sodium
+# 安装 flutter_rust_bridge_codegen 工具
+# cargo uninstall flutter_rust_bridge_codegen
+if ! command -v flutter_rust_bridge_codegen &> /dev/null; then
+    echo "正在安装 flutter_rust_bridge_codegen v1.80.0..."
+    cargo install flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+elif ! flutter_rust_bridge_codegen --version | grep -q "1.80.0"; then
+    echo "检测到版本不匹配，重新安装..."
+    cargo install --force flutter_rust_bridge_codegen --version "1.80.0" --features "uuid"
+fi
 
-rustup target add aarch64-linux-android
-cargo install cargo-ndk
-#VCPKG_ROOT=$HOME/vcpkg ANDROID_NDK_HOME=$HOME/android-ndk-r23c flutter/ndk_arm64.sh
-cargo ndk --platform 21 --target aarch64-linux-android build --release --features flutter,hwcodec
+# 确保 Rust 代码已正确编译
+# cargo build --verbose
+# 生成绑定代码
+rm -rf flutter/lib/generated_bridge.dart
+echo "[*]flutter_rust_bridge_codegen --rust-input $RootDir/src/flutter_ffi.rs --dart-output $RootDir/flutter/lib/generated_bridge.dart"
+flutter_rust_bridge_codegen --rust-input $RootDir/src/flutter_ffi.rs --dart-output $RootDir/flutter/lib/generated_bridge.dart
+if [ $? -eq 0 ]; then
+    echo "✅ Codegen succeeded"
+
+    # Cargo.toml添加dependencies
+    # cargo add libvpx
+    # cargo add libyuv
+    # cargo add opus
+    # cargo add sodium
+
+    # xcode-select --install
+    ls $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/inttypes.h
+    # 为 ARM64 设备添加目标支持
+    # 生成文件
+    cargo install cargo-ndk
+    rustup target install aarch64-linux-android
+    rustup target add aarch64-linux-android
+    echo "[!]run flutter/ndk_arm64.sh begin"
+    # ./flutter/ndk_arm64.sh
+    cargo ndk --platform 25 --target arm64-v8a build --release --features flutter,hwcodec
+    echo "[!]run flutter/ndk_arm64.sh end"
+    # 将生成的库移动到jniLibs目录中
+    mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+    cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+    # cd flutter
+    # fvm flutter build apk
+
+    # pushd flutter
+    # flutter build apk --release --target-platform android-arm64 --split-per-abi
+
+else
+    echo "❌ Codegen failed"
+fi
+exec $SHELL
+

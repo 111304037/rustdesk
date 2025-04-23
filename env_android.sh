@@ -5,13 +5,26 @@ RootDir=$(cd `dirname $0`; pwd)
 echo "RootDir=$RootDir"
 cd ${RootDir}
 
+export ANDROID_SDK=/Users/game-netease/Library/Android/sdk
+export ANDROID_HOME=$ANDROID_SDK
+export ANDROID_NDK=$ANDROID_SDK/ndk/26.0.10792818
+export ANDROID_NDK_HOME=$ANDROID_NDK
+export ANDROID_NDK_ROOT=$ANDROID_NDK
+export env_cmake=$ANDROID_SDK/cmake/3.18.1/bin
+export CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+export PATH=$ANDROID_HOME:$env_cmake$:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
+
+
 # VCPKG Configuration
-export VCPKG_ROOT=${RootDir}/deps/vcpkg/vcpkg
+export ANDROID_TARGET=arm64-v8a
 export VCPKG_ARCH=arm64-android
 export VCPKG_DEFAULT_TRIPLET=arm64-android
 export VCPKG_TARGET_TRIPLET=$VCPKG_DEFAULT_TRIPLET
+export VCPKG_ROOT=${RootDir}/deps/vcpkg/vcpkg
 # mac使用的是静态库，屏蔽掉
 # export VCPKGRS_DYNAMIC=1
+export PKG_CONFIG_ALLOW_CROSS=1
+# export PKG_CONFIG_SYSROOT_DIR=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 
 # # arm64-osx-dynamic.cmake
 # set(VCPKG_TARGET_ARCHITECTURE arm64)
@@ -49,16 +62,6 @@ export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG
 # export CPATH=$FFMPEG_DIR/include:$CPATH
 
 
-export ANDROID_SDK=/Users/game-netease/Library/Android/sdk
-export ANDROID_HOME=$ANDROID_SDK
-export ANDROID_NDK=$ANDROID_SDK/ndk/26.0.10792818
-export ANDROID_NDK_HOME=$ANDROID_NDK
-export ANDROID_NDK_ROOT=$ANDROID_NDK
-export env_cmake=$ANDROID_SDK/cmake/3.18.1/bin
-export CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
-export PATH=$ANDROID_HOME:$env_cmake$:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
-
-
 
 
 # PATH
@@ -71,12 +74,20 @@ export CARGO_ROOT=/Users/game-netease/.cargo/bin
 # Architecture
 export CARGO_CFG_TARGET_ARCH=aarch64
 # Debug settings
-export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
-export RUST_BACKTRACE=full
+# 详细build log，只有报错时才打开，方便找问题
+# export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
+# export CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=true
+# export RUST_BACKTRACE=full
 
 # #设置flutter中国镜像
 # export PUB_HOSTED_URL=https://pub.flutter-io.cn
 # export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+
+
+CROSS_COMPILE=`xcode-select --print-path`/Toolchains/XcodeDefault.xctoolchain/usr/bin/
+CROSS_TOP=`xcode-select --print-path`/Platforms/iPhoneOS.platform/Developer
+
+
 
 # Source cargo environment
 source $HOME/.cargo/env
