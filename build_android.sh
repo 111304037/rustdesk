@@ -58,7 +58,7 @@ pkg-config --cflags libavcodec
 # wget https://github.com/c-smile/sciter-sdk/raw/master/bin.osx/libsciter.dylib
 
 # cargo clean
-# cargo update
+cargo update
 
 
 # #Sciter版本
@@ -155,8 +155,8 @@ if [ $? -eq 0 ]; then
     rustup target add aarch64-linux-android
     echo "[!]run flutter/ndk_arm64.sh begin"
     # ./flutter/ndk_arm64.sh
-    # cargo ndk --platform 25 --target aarch64-linux-android build --release --features flutter,hwcodec
-    cargo build --target aarch64-linux-android --release --features flutter,hwcodec
+    cargo ndk --platform 25 --target aarch64-linux-android build --release --features flutter,hwcodec
+    # cargo build --target aarch64-linux-android --release --features flutter,hwcodec
     echo "[!]run flutter/ndk_arm64.sh end"
     # # 将生成的库移动到jniLibs目录中
     # mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a

@@ -14,6 +14,24 @@ export env_cmake=$ANDROID_SDK/cmake/3.18.1/bin
 export CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
 export PATH=$ANDROID_HOME:$env_cmake$:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
 
+export NDK_HOME="$ANDROID_NDK_HOME"
+# 添加 NDK 编译器到 PATH
+export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"
+
+# 设置交叉编译相关环境变量
+export TARGET_AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+export TARGET_CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android25-clang"
+export TARGET_CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android25-clang++"
+
+# 设置 Rust 目标
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TARGET_CC"
+export CC_aarch64_linux_android="$TARGET_CC"
+export CXX_aarch64_linux_android="$TARGET_CXX"
+export AR_aarch64_linux_android="$TARGET_AR"
+
+# 设置 Android API 级别
+export ANDROID_PLATFORM=25
+
 
 # VCPKG Configuration
 export ANDROID_TARGET=arm64-v8a
@@ -60,7 +78,7 @@ export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG
 # export PKG_CONFIG_PATH=$FFMPEG_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
 # export LIBRARY_PATH=$FFMPEG_DIR/lib:$LIBRARY_PATH
 # export CPATH=$FFMPEG_DIR/include:$CPATH
-
+export YUV_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib
 
 
 
@@ -75,9 +93,9 @@ export CARGO_ROOT=/Users/game-netease/.cargo/bin
 export CARGO_CFG_TARGET_ARCH=aarch64
 # Debug settings
 # 详细build log，只有报错时才打开，方便找问题
-# export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
-# export CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=true
-# export RUST_BACKTRACE=full
+export CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
+export CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=true
+export RUST_BACKTRACE=full
 
 # #设置flutter中国镜像
 # export PUB_HOSTED_URL=https://pub.flutter-io.cn
