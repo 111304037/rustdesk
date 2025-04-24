@@ -171,7 +171,7 @@ if [ "$GotoEND" = "false" ]; then
         rustup target add aarch64-linux-android
         echo "[!]run flutter/ndk_arm64.sh begin"
         # ./flutter/ndk_arm64.sh
-        # cargo ndk --platform $ANDROID_PLATFORM --target aarch64-linux-android build --release --features flutter,hwcodec
+        cargo ndk --platform $ANDROID_PLATFORM --target aarch64-linux-android build --release --features flutter,hwcodec
         # cargo build --target aarch64-linux-android --release --features flutter,hwcodec
         echo "[!]run flutter/ndk_arm64.sh end"
         # 将生成的库移动到jniLibs目录中
