@@ -12,7 +12,7 @@ export ANDROID_NDK_HOME=$ANDROID_NDK
 export ANDROID_NDK_ROOT=$ANDROID_NDK
 export env_cmake=$ANDROID_SDK/cmake/3.18.1/bin
 export CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
-export PATH=$ANDROID_HOME:$env_cmake$:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
+export PATH=$ANDROID_HOME:$env_cmake:$ANDROID_SDK/cmdline-tools/latest/bin:$PATH
 
 export NDK_HOME="$ANDROID_NDK_HOME"
 # 添加 NDK 编译器到 PATH
