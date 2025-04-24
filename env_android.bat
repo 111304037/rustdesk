@@ -1,5 +1,5 @@
 @REM @echo off
-setlocal EnableDelayedExpansion
+@REM setlocal EnableDelayedExpansion
 
 
 set "RootDir=%~dp0"
@@ -19,6 +19,12 @@ set "ANDROID_NDK_ROOT=%ANDROID_NDK%"
 set cmake_version=3.22.1
 set "env_cmake=%ANDROID_SDK%\cmake\%cmake_version%\bin"
 set "CMAKE_TOOLCHAIN_FILE=%ANDROID_NDK%\build\cmake\android.toolchain.cmake"
+
+@REM LLVM
+set LLVM_ROOT=%ANDROID_NDK%/toolchains/llvm/prebuilt/windows-x86_64
+set LIBCLANG_PATH=%LLVM_ROOT%\bin
+set PATH=%LLVM_ROOT%;%LIBCLANG_PATH%;%PATH%;
+
 @REM flutter env
 set FLUTTER_HOME=B:\Android\flutter
 set "PATH=%ANDROID_HOME%;%env_cmake%;%ANDROID_SDK%\cmdline-tools\latest\bin;%FLUTTER_HOME%\bin;%PATH%"
@@ -49,14 +55,16 @@ set "VCPKG_DEFAULT_TRIPLET=arm64-android"
 set "VCPKG_TARGET_TRIPLET=%VCPKG_DEFAULT_TRIPLET%"
 set "VCPKG_ROOT=%RootDir%\deps\vcpkg\vcpkg"
 set "PKG_CONFIG_ALLOW_CROSS=1"
-
 rem Include Paths
-set "CPATH=%RootDir%\vcpkg_installed\%VCPKG_ARCH%\include;%CPATH%"
-set "C_INCLUDE_PATH=%RootDir%\vcpkg_installed\%VCPKG_ARCH%\include;%C_INCLUDE_PATH%"
-set "CPLUS_INCLUDE_PATH=%RootDir%\vcpkg_installed\%VCPKG_ARCH%\include;%CPLUS_INCLUDE_PATH%"
+set "CPATH=%VCPKG_ROOT%\installed\%VCPKG_ARCH%\include;%CPATH%"
+set "C_INCLUDE_PATH=%VCPKG_ROOT%\installed\%VCPKG_ARCH%\include;%C_INCLUDE_PATH%"
+set "CPLUS_INCLUDE_PATH=%VCPKG_ROOT%\installed\%VCPKG_ARCH%\include;%CPLUS_INCLUDE_PATH%"
 
 rem Library Paths
-set "LIBRARY_PATH=%RootDir%\vcpkg_installed\%VCPKG_ARCH%\lib;%LIBRARY_PATH%"
+set "LIBRARY_PATH=%VCPKG_ROOT%\installed\%VCPKG_ARCH%\lib;%LIBRARY_PATH%"
+set LD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%LD_LIBRARY_PATH%
+set DYLD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%DYLD_LIBRARY_PATH%
+set PKG_CONFIG_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib/pkgconfig;%PKG_CONFIG_PATH%
 set "PATH=%PKG_CONFIG_PATH%;%VCPKG_ROOT%;%PATH%"
 
 rem Debug settings
@@ -77,9 +85,9 @@ set MSYS2_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/msys2
 set VCPKG_DEFAULT_TRIPLET_OVERRIDE=x64-windows-tuna
 
 
-
-endlocal & (
-    set "PATH=%PATH%"
-    set "ANDROID_SDK=%ANDROID_SDK%"
-    rem Export all other environment variables...
-)
+@REM @REM rem 在endlocal之前将需要传递的变量重新设置到父级环境
+@REM endlocal & (
+@REM     set "PATH=%PATH%"
+@REM     set "ANDROID_SDK=%ANDROID_SDK%"
+@REM     rem Export all other environment variables...
+@REM )

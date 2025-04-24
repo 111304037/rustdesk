@@ -51,25 +51,25 @@ export PKG_CONFIG_ALLOW_CROSS=1
 # set(VCPKG_OSX_ARCHITECTURES arm64)
 
 # Include Paths
-export CPATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPATH
-export C_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$C_INCLUDE_PATH
-export CPLUS_INCLUDE_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include:$CPLUS_INCLUDE_PATH
+export CPATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/include:$CPATH
+export C_INCLUDE_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/include:$C_INCLUDE_PATH
+export CPLUS_INCLUDE_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/include:$CPLUS_INCLUDE_PATH
 # Library Paths 
-export LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LIBRARY_PATH
-export LD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$LD_LIBRARY_PATH
-export DYLD_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib:$DYLD_LIBRARY_PATH
-export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG_CONFIG_PATH
+export LIBRARY_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib:$LIBRARY_PATH
+export LD_LIBRARY_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib:$LD_LIBRARY_PATH
+export DYLD_LIBRARY_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib:$DYLD_LIBRARY_PATH
+export PKG_CONFIG_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib/pkgconfig:$PKG_CONFIG_PATH
 
 # # LIB pkgconfig
 # # VPX Configuration
-# export VPX_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
-# export VPX_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH//lib
+# export VPX_INCLUDE_DIR=${VCPKG_ROOT}/installed/$VCPKG_ARCH/include
+# export VPX_LIB_DIR=${VCPKG_ROOT}/installed/$VCPKG_ARCH//lib
 # export LIBVPX_INCLUDE_DIR=$LIBVPX_INCLUDE_DIR
 # export LIBVPX_LIB_DIR=$VPX_LIB_DIR
 
 # # OPUS Configuration
-# export OPUS_INCLUDE_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/include
-# export OPUS_LIB_DIR=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib
+# export OPUS_INCLUDE_DIR=${VCPKG_ROOT}/installed/$VCPKG_ARCH/include
+# export OPUS_LIB_DIR=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib
 
 # ## opus
 # export PKG_CONFIG_PATH=/opt/homebrew/Cellar/opus/1.5.2/lib/pkgconfig:$PKG_CONFIG_PATH
@@ -78,7 +78,7 @@ export PKG_CONFIG_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib/pkgconfig:$PKG
 # export PKG_CONFIG_PATH=$FFMPEG_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
 # export LIBRARY_PATH=$FFMPEG_DIR/lib:$LIBRARY_PATH
 # export CPATH=$FFMPEG_DIR/include:$CPATH
-export YUV_LIBRARY_PATH=${RootDir}/vcpkg_installed/$VCPKG_ARCH/lib
+export YUV_LIBRARY_PATH=${VCPKG_ROOT}/installed/$VCPKG_ARCH/lib
 
 
 

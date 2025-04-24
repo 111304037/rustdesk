@@ -1,5 +1,5 @@
 @REM @echo off
-setlocal EnableDelayedExpansion
+@REM setlocal EnableDelayedExpansion
 
 set "ANDROID_ABI=%~1"
 
@@ -9,17 +9,17 @@ rem   1. set VCPKG_ROOT / ANDROID_NDK path environment variables
 rem   2. vcpkg initialized
 rem   3. ndk, version: r25c or newer
 
-if not defined ANDROID_NDK_HOME (
+if not exist "%ANDROID_NDK_HOME%" (
     echo Failed! Please set ANDROID_NDK_HOME
-    exit /b 1
+    @REM exit /b 1
 )
 
-if not defined VCPKG_ROOT (
+if not exist "%VCPKG_ROOT%" (
     echo Failed! Please set VCPKG_ROOT
     exit /b 1
 )
 
-set "API_LEVEL=21"
+set "API_LEVEL=%ANDROID_PLATFORM%"
 
 rem Get directory of this script
 set "SCRIPTDIR=%~dp0"
@@ -88,4 +88,4 @@ if "%ANDROID_ABI%"=="" (
     call :build
 )
 
-endlocal
+@REM endlocal

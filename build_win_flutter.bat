@@ -32,14 +32,14 @@ set VCPKG_DEFAULT_TRIPLET=x64-windows-static
 set VCPKG_TARGET_TRIPLET=%VCPKG_DEFAULT_TRIPLET%
 
 @REM Include Paths
-set CPATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%CPATH%
-set C_INCLUDE_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%C_INCLUDE_PATH%
-set CPLUS_INCLUDE_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/include;%CPLUS_INCLUDE_PATH%
+set CPATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/include;%CPATH%
+set C_INCLUDE_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/include;%C_INCLUDE_PATH%
+set CPLUS_INCLUDE_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/include;%CPLUS_INCLUDE_PATH%
 @REM Library Paths 
-set LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%LIBRARY_PATH%
-set LD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%LD_LIBRARY_PATH%
-set DYLD_LIBRARY_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib;%DYLD_LIBRARY_PATH%
-set PKG_CONFIG_PATH=%RootDir%/vcpkg_installed/%VCPKG_ARCH%/lib/pkgconfig;%PKG_CONFIG_PATH%
+set LIBRARY_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/lib;%LIBRARY_PATH%
+set LD_LIBRARY_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/lib;%LD_LIBRARY_PATH%
+set DYLD_LIBRARY_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/lib;%DYLD_LIBRARY_PATH%
+set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/%VCPKG_ARCH%/lib/pkgconfig;%PKG_CONFIG_PATH%
 
 @REM set pkg_vpx=%VCPKG_ROOT%\packages\libvpx_x64-windows-static\lib\pkgconfig
 @REM set PKG_CONFIG_PATH=%VCPKG_ROOT%/installed/x64-windows/lib/pkgconfig;%pkg_vpx%;%PKG_CONFIG_PAT%
@@ -79,13 +79,14 @@ if EXIST "%VCPKG_ROOT%\vcpkg.exe" (
 	call deps\vcpkg\vcpkg\bootstrap-vcpkg.bat
 )
 vcpkg --version
-vcpkg install --triplet=%VCPKG_TARGET_TRIPLET%
-if exist "%VCPKG_ROOT%\installed" (
-    echo link;%VCPKG_ROOT%\installed exist
-) else (
-    echo link;%VCPKG_ROOT%\installed from %RootDir%\vcpkg_installed
-    mklink /D "%VCPKG_ROOT%\installed" "%RootDir%\vcpkg_installed"
-)
+vcpkg install --triplet=%VCPKG_TARGET_TRIPLET% --x-install-root="%VCPKG_ROOT%\installed"
+@REM if exist "%VCPKG_ROOT%\installed" (
+@REM     echo link;%VCPKG_ROOT%\installed exist
+@REM ) else (
+@REM     echo link;%VCPKG_ROOT%\installed from %VCPKG_ROOT%\installed
+@REM     mklink /D "%VCPKG_ROOT%\installed" "%VCPKG_ROOT%\installed"
+@REM )
+
 @REM vcpkg install libvpx:x64-windows-static
 @REM vcpkg install libyuv:x64-windows-static
 @REM vcpkg install opus:x64-windows-static
