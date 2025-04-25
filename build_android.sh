@@ -91,6 +91,7 @@ else
     fvm install $flutter_ver
     # 设置全局flutter版本为
     fvm global $flutter_ver
+    fvm use $flutter_ver
 
     cd flutter
     fvm flutter clean
@@ -98,7 +99,6 @@ else
     rm -rf .dart_tool/
     rm -rf build/
     rm -rf pubspec.lock
-    fvm use $flutter_ver
     # 更新 Flutter 依赖,包括CocoaPods
     fvm flutter pub get
     # 需要激活ffigen

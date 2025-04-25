@@ -21,8 +21,18 @@ echo VPX_INCLUDE_DIR=%VPX_INCLUDE_DIR%
 cd /d "%RootDir%"
 echo Current directory: %CD%
 
+@REM 安装 FVM
+call dart pub global activate fvm
+@REM 修改FVM下载flutter位置
+@REM fvm config --cache-path E:\FVM_FlutterSDK
+@REM 安装 Flutter 版本 https://docs.flutter.cn/release/archive
+set flutter_ver=3.24.0
+call fvm install %flutter_ver%
+@REM 设置全局flutter版本为
+call fvm global %flutter_ver%
+
 if exist "%RootDir%\target\aarch64-linux-android\%MODE%" (
-    echo update skip
+    echo [*]Build_Skip=true
     set "Build_Skip=true"
 ) else (
     if exist "%VCPKG_ROOT%\vcpkg.exe" (
@@ -56,14 +66,16 @@ if exist "%RootDir%\target\aarch64-linux-android\%MODE%" (
     cd /d flutter
     
     rem Clean flutter project
-    call flutter clean
+    call fvm flutter clean
     @REM flutter pub cache clean
     rd /s /q .dart_tool 2>nul
     rd /s /q build 2>nul
     del /f /q pubspec.lock 2>nul
     
+    @REM 设置本地flutter版本为
+    call fvm use %flutter_ver%
     rem Update Flutter dependencies
-    call flutter pub get
+    call fvm flutter pub get
     
     rem Activate ffigen
     call dart pub global activate ffigen 8.0.2
@@ -71,10 +83,10 @@ if exist "%RootDir%\target\aarch64-linux-android\%MODE%" (
     @REM  显示当前 Flutter 版本
     echo "Flutter version:"
     echo Flutter version:
-    call flutter --version
-    call flutter --disable-analytics
+    call fvm flutter --version
+    call fvm flutter --disable-analytics
     call dart --disable-analytics
-    call flutter doctor -v
+    call fvm flutter doctor -v
     
     echo [!]run build_android_deps.bat begin
     call build_android_deps.bat "%ANDROID_TARGET%"
@@ -118,7 +130,6 @@ if exist "%RootDir%\target\aarch64-linux-android\%MODE%" (
     @REM cargo build --verbose
     @REM 生成绑定代码
     del /s /q  flutter\lib\generated_bridge.dart
-    set WIN32_LLVM_ROOT="C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64"
     @REM set gen_args="--rust-input %RootDir%\src\flutter_ffi.rs --dart-output %RootDir%\flutter\lib\generated_bridge.dart --llvm-path "%WIN32_LLVM_ROOT%
     @REM echo "[*]flutter_rust_bridge_codegen %gen_args%"
     @REM flutter_rust_bridge_codegen %gen_args%
@@ -153,8 +164,10 @@ if "%GotoEND%"=="false" (
         copy /y "target\aarch64-linux-android\release\liblibrustdesk.so" "flutter\android\app\src\main\jniLibs\arm64-v8a\librustdesk.so"
     )
     
-    pushd flutter
-    call flutter build apk --target-platform android-arm64 --%MODE%
+    echo [workdir]%RootDir%flutter
+    cd /d %RootDir%flutter
+    pushd %RootDir%flutter
+    call fvm flutter build apk --target-platform android-arm64 --%MODE%
     popd
 ) else (
     echo Build_Skip

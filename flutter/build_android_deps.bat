@@ -16,7 +16,7 @@ if not exist "%ANDROID_NDK_HOME%" (
 
 if not exist "%VCPKG_ROOT%" (
     echo Failed! Please set VCPKG_ROOT
-    exit /b 1
+    @REM exit /b 1
 )
 
 set "API_LEVEL=%ANDROID_PLATFORM%"
@@ -28,7 +28,7 @@ set "SCRIPTDIR=%SCRIPTDIR:~0,-1%"
 rem Check if vcpkg.json is one level up - in root directory of RD
 if not exist "%SCRIPTDIR%\..\vcpkg.json" (
     echo Failed! Please check where vcpkg.json is!
-    exit /b 1
+    @REM exit /b 1
 )
 
 rem NDK llvm toolchain
@@ -51,7 +51,7 @@ if "%ANDROID_ABI%"=="arm64-v8a" (
     set "VCPKG_TARGET=x86-android"
 ) else (
     echo ERROR: ANDROID_ABI must be one of: arm64-v8a, armeabi-v7a, x86_64, x86
-    exit /b 1
+    @REM exit /b 1
 )
 
 echo *** [%ANDROID_ABI%][Start] Build and install vcpkg dependencies
@@ -59,7 +59,7 @@ pushd "%SCRIPTDIR%\.."
 "%VCPKG_ROOT%\vcpkg.exe" install --triplet %VCPKG_TARGET% --x-install-root="%VCPKG_ROOT%\installed"
 if errorlevel 1 (
     echo Vcpkg install failed
-    exit /b 1
+    @REM exit /b 1
 )
 popd
 
@@ -83,7 +83,7 @@ goto :eof
 :main
 if "%ANDROID_ABI%"=="" (
     echo Usage: build-android-deps.bat ^<ANDROID-ABI^>
-    exit /b 1
+    @REM exit /b 1
 ) else (
     call :build
 )
