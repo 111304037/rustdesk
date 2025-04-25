@@ -7,6 +7,11 @@ set PythonLocation=B:\MyFiles\Python\Python38
 if not exist "%PythonLocation%" (
 	set PythonLocation=D:\App\Python310
 )
+set FLUTTER_HOME=B:\Android\flutter
+if not exist "%FLUTTER_HOME%" (
+	set FLUTTER_HOME=D:\App\Android\flutter
+)
+
 set PY_PIP=%PythonLocation%\Scripts
 set PY_DLLs=%PythonLocation%\DLLs
 set PY_LIBS=%PythonLocation%\Lib\site-packages
@@ -54,7 +59,6 @@ set env_vckpg=%env_nasm%;%env_perl%;%env_cmake%;
 
 set LLVM_ROOT=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64
 set LIBCLANG_PATH=%LLVM_ROOT%\bin
-set FLUTTER_HOME=B:\Android\flutter
 set env_rustdesk_build=%env_vckpg%;%env_toolchain%;%PKG_CONFIG_PATH%;%LIBCLANG_PATH%;%FLUTTER_HOME%\bin;
 
 set PATH=%env_rustdesk_build%;%LD_LIBRARY_PATH%;%VCPKG_ROOT%;%LLVM_ROOT%;%PATH%;
@@ -79,7 +83,11 @@ if EXIST "%VCPKG_ROOT%\vcpkg.exe" (
 	call deps\vcpkg\vcpkg\bootstrap-vcpkg.bat
 )
 vcpkg --version
-vcpkg install --triplet=%VCPKG_TARGET_TRIPLET% --x-install-root="%VCPKG_ROOT%\installed"
+"%VCPKG_ROOT%\vcpkg.exe" install --triplet %VCPKG_TARGET_TRIPLET% --x-install-root="%VCPKG_ROOT%\installed"
+if errorlevel 1 (
+    echo [-]Vcpkg install failed
+    goto :eof
+)
 @REM if exist "%VCPKG_ROOT%\installed" (
 @REM     echo link;%VCPKG_ROOT%\installed exist
 @REM ) else (
@@ -101,10 +109,13 @@ pkg-config --libs opus
 ::cargo clean
 ::cargo cache
 
-set CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true
-set RUST_BACKTRACE=full
+rem Debug settings
+set "CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true"
+set "CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=true"
+set "RUST_BACKTRACE=full"
+
 @REM cargo clean
-@REM cargo update
+cargo update
 @REM cargo build
 
 

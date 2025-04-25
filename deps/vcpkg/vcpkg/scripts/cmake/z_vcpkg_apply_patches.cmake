@@ -16,8 +16,12 @@ function(z_vcpkg_apply_patches)
     set(patchnum 0)
     foreach(patch IN LISTS arg_PATCHES)
         get_filename_component(absolute_patch "${patch}" ABSOLUTE BASE_DIR "${CURRENT_PORT_DIR}")
-        message(STATUS "Applying patch ${patch}")
         set(logname "patch-${TARGET_TRIPLET}-${patchnum}")
+        message(STATUS "[+]Applying patch ${patch}")
+        message(STATUS "[+]WORKING_DIRECTORY ${arg_SOURCE_PATH}")
+        message(STATUS "[+]absolute_patch: ${absolute_patch}")
+        message(STATUS "[+]log: ${CURRENT_BUILDTREES_DIR}/${logname}-out.log")
+        message(STATUS "${GIT}" -c core.longpaths=true -c core.autocrlf=false -c core.filemode=true --work-tree=. --git-dir=.git apply "${absolute_patch}" --ignore-whitespace --whitespace=nowarn --verbose)
         vcpkg_execute_in_download_mode(
             COMMAND "${GIT}" -c core.longpaths=true -c core.autocrlf=false -c core.filemode=true --work-tree=. --git-dir=.git apply "${absolute_patch}" --ignore-whitespace --whitespace=nowarn --verbose
             OUTPUT_FILE "${CURRENT_BUILDTREES_DIR}/${logname}-out.log"
@@ -29,9 +33,9 @@ function(z_vcpkg_apply_patches)
 
         if(error_code)
             if(arg_QUIET)
-                message(STATUS "Applying patch ${patch} - failure silenced")
+                message(STATUS "Applying patch ${patch} - failure silenced, Fix by LF???")
             else()
-                message(FATAL_ERROR "Applying patch failed: ${error}")
+                message(FATAL_ERROR "Applying patch failed: ${error}, Fix by LF???")
             endif()
         endif()
 
