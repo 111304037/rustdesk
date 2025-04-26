@@ -27,7 +27,9 @@ set PATH=%LLVM_ROOT%;%LIBCLANG_PATH%;%PATH%;
 
 @REM flutter env
 set FLUTTER_HOME=B:\Android\flutter
-set "PATH=%ANDROID_HOME%;%env_cmake%;%ANDROID_SDK%\cmdline-tools\latest\bin;%FLUTTER_HOME%\bin;%PATH%"
+@REM C:\Users\mengxingquan\AppData\Local\Pub\Cache\bin
+set FVM=%LOCALAPPDATA%\Pub\Cache\bin
+set "PATH=%ANDROID_HOME%;%env_cmake%;%ANDROID_SDK%\cmdline-tools\latest\bin;%FLUTTER_HOME%\bin;%FVM%;%PATH%"
 
 set "NDK_HOME=%ANDROID_NDK_HOME%"
 rem Add NDK compiler to PATH
@@ -84,6 +86,8 @@ set VCPKG_KEEP_ENV_VARS=MSYS2_MIRROR
 set MSYS2_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/msys2
 set VCPKG_DEFAULT_TRIPLET_OVERRIDE=x64-windows-tuna
 
+
+set WIN32_LLVM_ROOT="C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64"
 
 @REM @REM rem 在endlocal之前将需要传递的变量重新设置到父级环境
 @REM endlocal & (
